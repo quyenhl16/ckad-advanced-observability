@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/example/ckad-advanced-observability/internal/analytics/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/analytics/application"
 )
 
 type EventLogger struct {

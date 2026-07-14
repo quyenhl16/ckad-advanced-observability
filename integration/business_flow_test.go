@@ -12,16 +12,16 @@ import (
 	"sync"
 	"testing"
 
-	alerthttp "github.com/example/ckad-advanced-observability/internal/alert/adapters/http"
-	alertapp "github.com/example/ckad-advanced-observability/internal/alert/application"
-	fileadapter "github.com/example/ckad-advanced-observability/internal/analytics/adapters/file"
-	analyticshttp "github.com/example/ckad-advanced-observability/internal/analytics/adapters/http"
-	analyticsapp "github.com/example/ckad-advanced-observability/internal/analytics/application"
-	"github.com/example/ckad-advanced-observability/internal/domain"
-	"github.com/example/ckad-advanced-observability/internal/platform/httpx"
-	"github.com/example/ckad-advanced-observability/internal/platform/telemetry"
-	traffichttp "github.com/example/ckad-advanced-observability/internal/traffic/adapters/http"
-	trafficapp "github.com/example/ckad-advanced-observability/internal/traffic/application"
+	alerthttp "github.com/quyenhl16/ckad-advanced-observability/internal/alert/adapters/http"
+	alertapp "github.com/quyenhl16/ckad-advanced-observability/internal/alert/application"
+	fileadapter "github.com/quyenhl16/ckad-advanced-observability/internal/analytics/adapters/file"
+	analyticshttp "github.com/quyenhl16/ckad-advanced-observability/internal/analytics/adapters/http"
+	analyticsapp "github.com/quyenhl16/ckad-advanced-observability/internal/analytics/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/httpx"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/telemetry"
+	traffichttp "github.com/quyenhl16/ckad-advanced-observability/internal/traffic/adapters/http"
+	trafficapp "github.com/quyenhl16/ckad-advanced-observability/internal/traffic/application"
 )
 
 type memoryAlertRepository struct {

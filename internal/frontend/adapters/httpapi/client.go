@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/ckad-advanced-observability/internal/frontend/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/frontend/application"
 )
 
 type Client struct {

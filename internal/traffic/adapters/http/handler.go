@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
-	"github.com/example/ckad-advanced-observability/internal/platform/httpx"
-	"github.com/example/ckad-advanced-observability/internal/traffic/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/httpx"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/traffic/application"
 	"go.opentelemetry.io/otel/trace"
 )
 

@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"time"
 
-	fileadapter "github.com/example/ckad-advanced-observability/internal/analytics/adapters/file"
-	httpadapter "github.com/example/ckad-advanced-observability/internal/analytics/adapters/http"
-	"github.com/example/ckad-advanced-observability/internal/analytics/application"
-	"github.com/example/ckad-advanced-observability/internal/platform/config"
-	"github.com/example/ckad-advanced-observability/internal/platform/httpx"
-	"github.com/example/ckad-advanced-observability/internal/platform/server"
-	"github.com/example/ckad-advanced-observability/internal/platform/telemetry"
+	fileadapter "github.com/quyenhl16/ckad-advanced-observability/internal/analytics/adapters/file"
+	httpadapter "github.com/quyenhl16/ckad-advanced-observability/internal/analytics/adapters/http"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/analytics/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/config"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/httpx"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/server"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/telemetry"
 )
 
 func main() {

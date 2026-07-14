@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 )
 
 type NotificationRepository interface {

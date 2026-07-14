@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/example/ckad-advanced-observability/internal/frontend/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/frontend/application"
 )
 
 //go:embed templates/index.html

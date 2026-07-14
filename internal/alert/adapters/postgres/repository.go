@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

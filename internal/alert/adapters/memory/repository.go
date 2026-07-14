@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 )
 
 type Repository struct {

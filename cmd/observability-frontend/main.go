@@ -7,13 +7,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/example/ckad-advanced-observability/internal/frontend/adapters/httpapi"
-	"github.com/example/ckad-advanced-observability/internal/frontend/adapters/web"
-	"github.com/example/ckad-advanced-observability/internal/frontend/application"
-	"github.com/example/ckad-advanced-observability/internal/platform/config"
-	"github.com/example/ckad-advanced-observability/internal/platform/httpx"
-	"github.com/example/ckad-advanced-observability/internal/platform/server"
-	"github.com/example/ckad-advanced-observability/internal/platform/telemetry"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/frontend/adapters/httpapi"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/frontend/adapters/web"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/frontend/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/config"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/httpx"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/server"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/telemetry"
 )
 
 func main() {

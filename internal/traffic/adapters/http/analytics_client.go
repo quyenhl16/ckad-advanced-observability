@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )

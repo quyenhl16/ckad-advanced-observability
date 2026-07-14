@@ -1,4 +1,4 @@
-module github.com/example/ckad-advanced-observability
+module github.com/quyenhl16/ckad-advanced-observability
 
 go 1.24.0
 

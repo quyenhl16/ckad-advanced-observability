@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/example/ckad-advanced-observability/internal/analytics/application"
-	"github.com/example/ckad-advanced-observability/internal/domain"
-	"github.com/example/ckad-advanced-observability/internal/platform/httpx"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/analytics/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/httpx"
 )
 
 type Handler struct {

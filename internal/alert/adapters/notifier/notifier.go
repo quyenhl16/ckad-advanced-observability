@@ -7,8 +7,8 @@ import (
 	"net/smtp"
 	"strings"
 
-	"github.com/example/ckad-advanced-observability/internal/alert/application"
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 )
 
 type MailSender interface {

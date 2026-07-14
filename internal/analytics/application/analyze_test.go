@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 )
 
 type eventLoggerStub struct{ event AnalysisEvent }

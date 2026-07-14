@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/ckad-advanced-observability/internal/alert/adapters/memory"
-	"github.com/example/ckad-advanced-observability/internal/alert/application"
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/adapters/memory"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 )
 
 type senderSpy struct{ recipients []string }

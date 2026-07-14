@@ -6,15 +6,15 @@ import (
 	"net/http"
 	"os"
 
-	httpadapter "github.com/example/ckad-advanced-observability/internal/alert/adapters/http"
-	"github.com/example/ckad-advanced-observability/internal/alert/adapters/memory"
-	"github.com/example/ckad-advanced-observability/internal/alert/adapters/notifier"
-	"github.com/example/ckad-advanced-observability/internal/alert/adapters/postgres"
-	"github.com/example/ckad-advanced-observability/internal/alert/application"
-	"github.com/example/ckad-advanced-observability/internal/platform/config"
-	"github.com/example/ckad-advanced-observability/internal/platform/httpx"
-	"github.com/example/ckad-advanced-observability/internal/platform/server"
-	"github.com/example/ckad-advanced-observability/internal/platform/telemetry"
+	httpadapter "github.com/quyenhl16/ckad-advanced-observability/internal/alert/adapters/http"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/adapters/memory"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/adapters/notifier"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/adapters/postgres"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/alert/application"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/config"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/httpx"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/server"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/platform/telemetry"
 )
 
 func main() {

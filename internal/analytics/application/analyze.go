@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/ckad-advanced-observability/internal/domain"
+	"github.com/quyenhl16/ckad-advanced-observability/internal/domain"
 	"go.opentelemetry.io/otel/trace"
 )
 
