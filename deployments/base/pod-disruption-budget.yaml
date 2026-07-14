@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: traffic-ingest
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: traffic-ingest
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: traffic-ingest

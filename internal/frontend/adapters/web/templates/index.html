@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="10">
+  <title>Network Observability</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07101d;--panel:#101c2e;--soft:#17263c;--line:#263a56;--text:#edf3fb;--muted:#90a4bf;--cyan:#41d9db;--red:#ff6c78;--green:#62d49b}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#11294b 0,transparent 36%),var(--bg);color:var(--text);font:14px/1.5 system-ui,sans-serif}
+    main{width:min(1380px,94%);margin:34px auto}header{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:20px}h1{margin:0;font-size:30px}p{color:var(--muted);margin:5px 0 0}
+    header form{display:grid;grid-template-columns:190px 220px 320px auto auto;gap:8px}input,select,button,.button{padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--text)}
+    button,.button{background:var(--cyan);color:#041113;border:0;font-weight:700;cursor:pointer;text-decoration:none}.button.secondary{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px}.card strong{display:block;font-size:26px}.card span{color:var(--muted)}
+    section{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:18px 0;overflow:auto}h2{font-size:17px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line)}
+    table{border-collapse:collapse;width:100%;min-width:1100px}th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-size:11px;text-transform:uppercase}code,a{color:var(--cyan)}
+    .bad{color:var(--red);font-weight:700}.good{color:var(--green);font-weight:700}.empty{color:var(--muted);padding:22px 18px}.device{font-weight:650}.device small{display:block;color:var(--muted);font-weight:400}
+    .admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px}.admin-box{background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:16px}.admin-box h3{margin:0 0 12px}.admin-form{display:grid;gap:9px}.scope-all{color:var(--muted);font-style:italic}.danger{background:transparent;color:var(--red);border:1px solid #713642;padding:6px 10px}.subheading{padding:12px 18px;margin:0;color:var(--muted)}
+    @media(max-width:980px){header{align-items:stretch;flex-direction:column}header form{grid-template-columns:1fr 1fr}header form input{grid-column:span 2}.summary,.admin-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body><main>
+  <header>
+    <div><h1>Advanced Network Observability</h1><p>Trace client metrics, structured logs and alerts. Auto-refresh every 10 seconds.</p></div>
+    <form method="get">
+      <select name="device_type">
+        <option value="">All client types</option>
+        {{range .DeviceTypes}}<option value="{{.}}" {{if eq $.DeviceType .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+      <input name="device_id" value="{{.DeviceID}}" placeholder="Client ID">
+      <input name="trace_id" value="{{.TraceID}}" placeholder="Trace ID">
+      <button>Apply filters</button><a class="button secondary" href="/">Clear</a>
+    </form>
+  </header>
+  <div class="summary">
+    <div class="card"><strong>{{len .Events}}</strong><span>matching structured events</span></div>
+    <div class="card"><strong>{{len .Alerts}}</strong><span>matching persisted alerts</span></div>
+    <div class="card"><strong>{{if .DeviceType}}{{.DeviceType}}{{else}}all{{end}}</strong><span>selected client type</span></div>
+  </div>
+  <section><h2>{{if .DeviceID}}Metric history for {{.DeviceID}}{{else}}Client telemetry{{end}}</h2>
+    {{if .Events}}<table><thead><tr><th>Time</th><th>Trace</th><th>Client</th><th>CPU</th><th>RAM</th><th>Temperature</th><th>Latency</th><th>Packet loss</th><th>Status</th></tr></thead><tbody>
+    {{range .Events}}<tr>
+      <td>{{.Timestamp.Format "2006-01-02 15:04:05"}}</td>
+      <td><a href="/?trace_id={{.TraceID}}"><code>{{.TraceID}}</code></a></td>
+      <td class="device"><a href="/?device_type={{.DeviceType}}&device_id={{.DeviceID}}">{{.DeviceID}}</a><small>{{.DeviceType}}</small></td>
+      <td>{{.CPUUsagePercent}}%</td><td>{{.MemoryUsagePercent}}%</td><td>{{.TemperatureCelsius}} C</td>
+      <td>{{.LatencyMS}} / {{.ThresholdMS}} ms</td><td>{{.PacketLossPercent}}%</td>
+      <td class="{{if eq .Status "THRESHOLD_EXCEEDED"}}bad{{else}}good{{end}}">{{.Status}}</td>
+    </tr>{{end}}</tbody></table>{{else}}<div class="empty">No telemetry matches the selected client or trace.</div>{{end}}
+  </section>
+  <section><h2>Alert history</h2>
+    {{if .Alerts}}<table><thead><tr><th>ID</th><th>Trace</th><th>Client</th><th>Latency</th><th>Severity</th><th>Status</th><th>Created</th></tr></thead><tbody>
+    {{range .Alerts}}<tr><td>#{{.ID}}</td><td><a href="/?trace_id={{.TraceID}}"><code>{{.TraceID}}</code></a></td>
+      <td class="device"><a href="/?device_type={{.DeviceType}}&device_id={{.DeviceID}}">{{.DeviceID}}</a><small>{{.DeviceType}}</small></td>
+      <td>{{.LatencyMS}} / {{.ThresholdMS}} ms</td><td class="bad">{{.Severity}}</td><td>{{.Status}}</td><td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td></tr>{{end}}
+    </tbody></table>{{else}}<div class="empty">No alerts match the selected client or trace.</div>{{end}}
+  </section>
+  <section id="notifications"><h2>Email alert subscriptions</h2>
+    <div class="admin-grid">
+      <div class="admin-box"><h3>Create user</h3>
+        <form class="admin-form" method="post" action="/users">
+          <input name="name" required placeholder="Full name">
+          <input name="email" type="email" required placeholder="name@example.com">
+          <button>Create user</button>
+        </form>
+      </div>
+      <div class="admin-box"><h3>Register alert subscription</h3>
+        <form class="admin-form" method="post" action="/subscriptions">
+          <select name="user_id" required><option value="">Select user</option>{{range .Users}}<option value="{{.ID}}">{{.Name}} · {{.Email}}</option>{{end}}</select>
+          <select name="device_type" required><option value="">Select client type</option>{{range .DeviceTypes}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+          <input name="device_id" placeholder="Client ID (empty = all devices of type)">
+          <button>Subscribe to alerts</button>
+        </form>
+      </div>
+    </div>
+    <h3 class="subheading">Users</h3>
+    {{if .Users}}<table><thead><tr><th>Name</th><th>Email</th><th>Action</th></tr></thead><tbody>
+      {{range .Users}}<tr><td>{{.Name}}</td><td>{{.Email}}</td><td><form method="post" action="/users/delete"><input type="hidden" name="id" value="{{.ID}}"><button class="danger" onclick="return confirm('Delete this user and all subscriptions?')">Delete user</button></form></td></tr>{{end}}
+    </tbody></table>{{else}}<div class="empty">No users configured.</div>{{end}}
+    <h3 class="subheading">Active subscriptions</h3>
+    {{if .Subscriptions}}<table><thead><tr><th>User</th><th>Email</th><th>Client type</th><th>Client scope</th><th>Action</th></tr></thead><tbody>
+      {{range .Subscriptions}}<tr><td>{{.UserName}}</td><td>{{.UserEmail}}</td><td>{{.DeviceType}}</td><td>{{if .DeviceID}}{{.DeviceID}}{{else}}<span class="scope-all">All {{.DeviceType}} devices</span>{{end}}</td><td><form method="post" action="/subscriptions/delete"><input type="hidden" name="id" value="{{.ID}}"><button class="danger">Unsubscribe</button></form></td></tr>{{end}}
+    </tbody></table>{{else}}<div class="empty">No email subscriptions configured.</div>{{end}}
+  </section>
+</main></body></html>

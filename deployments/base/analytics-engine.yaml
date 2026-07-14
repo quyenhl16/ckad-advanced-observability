@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-engine
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: analytics-engine
+    app.kubernetes.io/component: analytics
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  selector: {app: analytics-engine}
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-engine
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: analytics-engine
+    app.kubernetes.io/component: analytics
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: {app: analytics-engine}
+  template:
+    metadata:
+      labels:
+        app: analytics-engine
+        app.kubernetes.io/name: analytics-engine
+        app.kubernetes.io/component: analytics
+        app.kubernetes.io/part-of: advanced-observability
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: ckad/analytics-engine:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef: {name: observability-config}
+          env:
+            - name: HTTP_ADDR
+              value: :8081
+            - name: ANALYTICS_LOG_PATH
+              value: /var/log/analytics/events.jsonl
+            - name: ALERT_API_KEY
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: ALERT_API_KEY}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 15
+          volumeMounts:
+            - name: analytics-logs
+              mountPath: /var/log/analytics
+        - name: log-collector
+          image: busybox:1.37
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c, "until [ -f /logs/events.jsonl ]; do sleep 1; done; tail -n+1 -F /logs/events.jsonl"]
+          resources:
+            requests: {cpu: 10m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: analytics-logs
+              mountPath: /logs
+              readOnly: true
+      volumes:
+        - name: analytics-logs
+          emptyDir: {}

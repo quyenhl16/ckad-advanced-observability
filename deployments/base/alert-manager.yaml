@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-manager
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: alert-manager
+    app.kubernetes.io/component: alerting
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  selector: {app: alert-manager}
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-manager
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: alert-manager
+    app.kubernetes.io/component: alerting
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: {app: alert-manager}
+  template:
+    metadata:
+      labels:
+        app: alert-manager
+        app.kubernetes.io/name: alert-manager
+        app.kubernetes.io/component: alerting
+        app.kubernetes.io/part-of: advanced-observability
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-database
+          image: postgres:17-alpine
+          command: [sh, -c, 'until pg_isready -h observability-db -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done']
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: POSTGRES_USER}
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: POSTGRES_DB}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 64Mi}
+      containers:
+        - name: app
+          image: ckad/alert-manager:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+          env:
+            - name: HTTP_ADDR
+              value: :8082
+            - name: ALERT_API_KEY
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: ALERT_API_KEY}
+            - name: ALERT_NOTIFIER
+              valueFrom:
+                configMapKeyRef: {name: observability-config, key: ALERT_NOTIFIER}
+            - name: ALERT_REPOSITORY
+              valueFrom:
+                configMapKeyRef: {name: observability-config, key: ALERT_REPOSITORY}
+            - name: SMTP_ADDRESS
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: SMTP_ADDRESS}
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: SMTP_HOST}
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: SMTP_USERNAME}
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: SMTP_PASSWORD}
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: SMTP_FROM}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: POSTGRES_PASSWORD}
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: POSTGRES_DB}
+            - name: DATABASE_URL
+              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@observability-db:5432/$(POSTGRES_DB)?sslmode=disable
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 20

@@ -1,0 +1,134 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: advanced-observability
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: advanced-observability
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: traffic-ingest
+  namespace: advanced-observability
+spec:
+  podSelector:
+    matchLabels: {app: traffic-ingest}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - {protocol: TCP, port: 8080}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app: analytics-engine}
+      ports:
+        - {protocol: TCP, port: 8081}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: analytics-engine
+  namespace: advanced-observability
+spec:
+  podSelector:
+    matchLabels: {app: analytics-engine}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: traffic-ingest}
+        - podSelector:
+            matchLabels: {app: observability-frontend}
+      ports:
+        - {protocol: TCP, port: 8081}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app: alert-manager}
+      ports:
+        - {protocol: TCP, port: 8082}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alert-manager
+  namespace: advanced-observability
+spec:
+  podSelector:
+    matchLabels: {app: alert-manager}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: analytics-engine}
+        - podSelector:
+            matchLabels: {app: observability-frontend}
+      ports:
+        - {protocol: TCP, port: 8082}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app: observability-db}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - ports:
+        - {protocol: TCP, port: 587}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-db
+  namespace: advanced-observability
+spec:
+  podSelector:
+    matchLabels: {app: observability-db}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: alert-manager}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-frontend
+  namespace: advanced-observability
+spec:
+  podSelector:
+    matchLabels: {app: observability-frontend}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - {protocol: TCP, port: 8083}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app: analytics-engine}
+      ports:
+        - {protocol: TCP, port: 8081}
+    - to:
+        - podSelector:
+            matchLabels: {app: alert-manager}
+      ports:
+        - {protocol: TCP, port: 8082}

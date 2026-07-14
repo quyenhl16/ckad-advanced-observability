@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-config
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/part-of: advanced-observability
+data:
+  ANALYTICS_URL: http://analytics-engine:8081
+  ALERT_MANAGER_URL: http://alert-manager:8082
+  LATENCY_THRESHOLD_MS: "150"
+  HTTP_CLIENT_TIMEOUT: 5s
+  ALERT_NOTIFIER: log
+  ALERT_REPOSITORY: postgres
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: observability-secrets
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/part-of: advanced-observability
+type: Opaque
+stringData:
+  POSTGRES_USER: observability
+  POSTGRES_PASSWORD: change-me-before-production
+  POSTGRES_DB: observability
+  ALERT_API_KEY: change-me-before-production
+  SMTP_ADDRESS: smtp.example.com:587
+  SMTP_HOST: smtp.example.com
+  SMTP_USERNAME: change-me
+  SMTP_PASSWORD: change-me
+  SMTP_FROM: alerts@example.com

@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: observability-frontend
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: observability-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  selector: {app: observability-frontend}
+  ports:
+    - name: http
+      port: 8083
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability-frontend
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: observability-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: {app: observability-frontend}
+  template:
+    metadata:
+      labels:
+        app: observability-frontend
+        app.kubernetes.io/name: observability-frontend
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: advanced-observability
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: ckad/observability-frontend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          envFrom:
+            - configMapRef: {name: observability-config}
+          env:
+            - name: HTTP_ADDR
+              value: :8083
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 25m, memory: 24Mi}
+            limits: {cpu: 150m, memory: 96Mi}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 15
