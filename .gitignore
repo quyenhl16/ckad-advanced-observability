@@ -4,3 +4,4 @@
 *.out
 .env
 /.cache/
+/deployments/.deploy-overlay.*/

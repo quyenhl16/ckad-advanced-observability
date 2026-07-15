@@ -3,6 +3,57 @@
 The base deploys four Go services and one PostgreSQL StatefulSet into the
 `advanced-observability` namespace.
 
+## Automated deployment on CentOS Stream 10
+
+The repository includes an end-to-end Bash script for a CentOS Stream 10 host.
+It requires access to an existing Kubernetes cluster, `kubectl`, and either
+Docker or Podman. Kind and Minikube also require their respective CLI.
+
+Make the script executable, then choose the example matching the cluster.
+
+```bash
+chmod +x scripts/deploy-k8s.sh
+```
+
+For Kind:
+
+```bash
+POSTGRES_PASSWORD='replace-with-a-strong-value' \
+ALERT_API_KEY='replace-with-a-strong-value' \
+./scripts/deploy-k8s.sh --cluster kind --cluster-name observability
+```
+
+For Minikube:
+
+```bash
+POSTGRES_PASSWORD='replace-with-a-strong-value' \
+ALERT_API_KEY='replace-with-a-strong-value' \
+./scripts/deploy-k8s.sh --cluster minikube --cluster-name minikube
+```
+
+For a remote or multi-node cluster, authenticate the container engine to a
+registry that every Kubernetes node can pull from, then run. For a private
+registry, the nodes or Kubernetes workload must already have pull credentials.
+
+```bash
+podman login registry.example.com
+POSTGRES_PASSWORD='replace-with-a-strong-value' \
+ALERT_API_KEY='replace-with-a-strong-value' \
+./scripts/deploy-k8s.sh \
+  --cluster generic \
+  --engine podman \
+  --registry registry.example.com/my-team
+```
+
+Run `./scripts/deploy-k8s.sh --help` for all options. The script performs these
+steps: validates cluster access, builds four service images, loads or pushes
+the images, generates a temporary Kustomize overlay with secrets and image
+tags, applies the manifests, waits for all rollouts, and prints access commands.
+
+For a generic/shared cluster, `POSTGRES_PASSWORD` and `ALERT_API_KEY` are
+mandatory. Avoid changing the PostgreSQL credentials after the database PVC
+has already been initialized.
+
 ## 1. Build the application images
 
 Run these commands from the repository root:
