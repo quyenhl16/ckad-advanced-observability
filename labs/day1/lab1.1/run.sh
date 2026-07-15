@@ -6,12 +6,12 @@ readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
 readonly GENERATED_MANIFEST="/tmp/lab1.1-pod.yaml"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
 
-IMAGE="${IMAGE:-$(kubectl get deployment traffic-ingest \
-  -n advanced-observability \
-  -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)}"
-IMAGE="${IMAGE:-ckad/traffic-ingest:local}"
+IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+  advanced-observability traffic-ingest 'app=traffic-ingest')"
 
 kubectl run traffic-pod-60 \
   -n "$NAMESPACE" \

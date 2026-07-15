@@ -7,16 +7,13 @@ readonly NAMESPACE="ckad-labs"
 readonly DEPLOYMENT="traffic-rollout"
 ACTION="${1:-status}"
 
-current_image() {
-  kubectl get deployment traffic-ingest -n advanced-observability \
-    -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true
-}
+source "${ROOT_DIR}/labs/common/images.sh"
 
 case "$ACTION" in
   deploy)
     kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
-    IMAGE_V1="${IMAGE_V1:-$(current_image)}"
-    IMAGE_V1="${IMAGE_V1:-ckad/traffic-ingest:local}"
+    IMAGE_V1="$(resolve_workload_image "${IMAGE_V1:-${IMAGE:-}}" \
+      advanced-observability traffic-ingest 'app=traffic-ingest')"
     sed "s|ckad/traffic-ingest:local|${IMAGE_V1}|" "${LAB_DIR}/deployment.yaml" | kubectl apply -f -
     kubectl rollout status deployment/"$DEPLOYMENT" -n "$NAMESPACE" --timeout=180s
     ;;

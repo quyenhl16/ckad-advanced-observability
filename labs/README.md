@@ -18,8 +18,10 @@ script. Make all scripts executable on CentOS:
 find labs -name run.sh -exec chmod +x {} +
 ```
 
-The scripts discover the currently deployed application image when possible.
-You can override it explicitly:
+The scripts first use an explicit `IMAGE`, otherwise they copy the image from a
+currently Running production Pod. They use the Deployment spec only when it is
+not a `ckad/...:local` placeholder. This prevents accidental Docker Hub pulls
+after a failed production rollout. You can override image discovery explicitly:
 
 ```bash
 IMAGE=10.206.0.3:5000/traffic-ingest:my-tag ./labs/day1/lab1.1/run.sh

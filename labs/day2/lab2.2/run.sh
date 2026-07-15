@@ -6,16 +6,16 @@ readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
 ACTION="${1:-status}"
 
-discover_image() {
-  kubectl get deployment traffic-ingest -n advanced-observability \
-    -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true
-}
+source "${ROOT_DIR}/labs/common/images.sh"
 
 case "$ACTION" in
   deploy)
     kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
-    DEFAULT_IMAGE="${IMAGE:-$(discover_image)}"
-    DEFAULT_IMAGE="${DEFAULT_IMAGE:-ckad/traffic-ingest:local}"
+    DEFAULT_IMAGE=""
+    if [[ -z "${BLUE_IMAGE:-}" || -z "${GREEN_IMAGE:-}" ]]; then
+      DEFAULT_IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+        advanced-observability traffic-ingest 'app=traffic-ingest')"
+    fi
     BLUE_IMAGE="${BLUE_IMAGE:-$DEFAULT_IMAGE}"
     GREEN_IMAGE="${GREEN_IMAGE:-$DEFAULT_IMAGE}"
     sed "s|ckad/traffic-ingest:local|${BLUE_IMAGE}|" "${LAB_DIR}/blue.yaml" | kubectl apply -f -

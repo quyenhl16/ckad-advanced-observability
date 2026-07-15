@@ -8,6 +8,8 @@ readonly OVERLAY="${LAB_DIR}/overlays/lab"
 readonly RENDERED="/tmp/lab2.4-rendered.yaml"
 ACTION="${1:-render}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 render() {
   kubectl kustomize "$OVERLAY" > "$RENDERED"
   if [[ -n "${IMAGE:-}" ]]; then
@@ -22,17 +24,18 @@ case "$ACTION" in
     ;;
   diff)
     kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
+    IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+      advanced-observability traffic-ingest 'app=traffic-ingest')"
+    export IMAGE
     render
     kubectl diff -f "$RENDERED" || status=$?
     [[ "${status:-0}" -le 1 ]] || exit "$status"
     ;;
   apply)
     kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
-    if [[ -z "${IMAGE:-}" ]]; then
-      IMAGE="$(kubectl get deployment traffic-ingest -n advanced-observability \
-        -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
-      export IMAGE
-    fi
+    IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+      advanced-observability traffic-ingest 'app=traffic-ingest')"
+    export IMAGE
     render
     kubectl apply -f "$RENDERED"
     kubectl rollout status deployment/traffic-kustomize -n "$NAMESPACE" --timeout=180s

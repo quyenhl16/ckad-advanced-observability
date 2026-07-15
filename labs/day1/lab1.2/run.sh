@@ -5,12 +5,12 @@ readonly LAB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
 
-IMAGE="${IMAGE:-$(kubectl get deployment analytics-engine \
-  -n advanced-observability \
-  -o jsonpath='{.spec.template.spec.containers[?(@.name=="app")].image}' 2>/dev/null || true)}"
-IMAGE="${IMAGE:-ckad/analytics-engine:local}"
+IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+  advanced-observability analytics-engine 'app=analytics-engine')"
 
 sed "s|ckad/analytics-engine:local|${IMAGE}|" "${LAB_DIR}/pod.yaml" | kubectl apply -f -
 kubectl wait --for=condition=Ready pod/analytics-pattern \

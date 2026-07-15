@@ -6,12 +6,13 @@ readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
 ACTION="${1:-status}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 case "$ACTION" in
   deploy)
     kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
-    IMAGE="${IMAGE:-$(kubectl get deployment traffic-ingest -n advanced-observability \
-      -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)}"
-    IMAGE="${IMAGE:-ckad/traffic-ingest:local}"
+    IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+      advanced-observability traffic-ingest 'app=traffic-ingest')"
     sed "s|ckad/traffic-ingest:local|${IMAGE}|" "${LAB_DIR}/deployment.yaml" | kubectl apply -f -
     kubectl rollout status deployment/traffic-hpa -n "$NAMESPACE" --timeout=180s
     ;;
