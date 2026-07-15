@@ -110,6 +110,8 @@ spec:
               value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@observability-db:5432/$(POSTGRES_DB)?sslmode=disable
           securityContext:
             runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
