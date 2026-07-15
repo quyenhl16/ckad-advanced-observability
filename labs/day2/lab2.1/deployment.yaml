@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-rollout
+  namespace: ckad-labs
+  labels:
+    app: traffic-rollout
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: traffic-rollout
+  template:
+    metadata:
+      labels:
+        app: traffic-rollout
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: app
+          image: ckad/traffic-ingest:local
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HTTP_ADDR
+              value: :8080
+            - name: ANALYTICS_URL
+              value: http://analytics-engine.advanced-observability.svc.cluster.local:8081
+          resources:
+            requests: {cpu: 25m, memory: 24Mi}
+            limits: {cpu: 200m, memory: 96Mi}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10

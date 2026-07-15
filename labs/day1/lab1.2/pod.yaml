@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: analytics-pattern
+  namespace: ckad-labs
+  labels:
+    app: analytics-pattern
+    pattern: init-sidecar
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+    - name: init-log
+      image: busybox:1.37
+      command: [sh, -c, 'touch /logs/events.jsonl && chmod 664 /logs/events.jsonl']
+      volumeMounts:
+        - name: analytics-logs
+          mountPath: /logs
+  containers:
+    - name: app
+      image: ckad/analytics-engine:local
+      ports:
+        - name: http
+          containerPort: 8081
+      env:
+        - name: HTTP_ADDR
+          value: :8081
+        - name: ANALYTICS_LOG_PATH
+          value: /var/log/analytics/events.jsonl
+        - name: LATENCY_THRESHOLD_MS
+          value: "150"
+        - name: ALERT_MANAGER_URL
+          value: http://alert-manager.advanced-observability.svc.cluster.local:8082
+        - name: ALERT_API_KEY
+          value: lab-key
+      resources:
+        requests: {cpu: 50m, memory: 32Mi}
+        limits: {cpu: 250m, memory: 128Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+      volumeMounts:
+        - name: analytics-logs
+          mountPath: /var/log/analytics
+    - name: log-collector
+      image: busybox:1.37
+      command: [sh, -c, 'tail -n+1 -F /logs/events.jsonl']
+      resources:
+        requests: {cpu: 10m, memory: 8Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+      volumeMounts:
+        - name: analytics-logs
+          mountPath: /logs
+          readOnly: true
+  volumes:
+    - name: analytics-logs
+      emptyDir: {}

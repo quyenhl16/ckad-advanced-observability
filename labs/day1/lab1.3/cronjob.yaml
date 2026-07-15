@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: metric-every-minute
+  namespace: ckad-labs
+  labels:
+    app: metric-generator
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: metric-generator
+            workload: cronjob
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: submit
+              image: curlimages/curl:8.10.1
+              args:
+                - -fsS
+                - -X
+                - POST
+                - http://traffic-ingest.advanced-observability.svc.cluster.local:8080/api/v1/metrics
+                - -H
+                - "Content-Type: application/json"
+                - -d
+                - '{"device_type":"server","device_id":"cron-01","cpu_usage_percent":40,"memory_usage_percent":55,"temperature_celsius":48,"latency_ms":180,"packet_loss_percent":0.5}'
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {cpu: 100m, memory: 64Mi}

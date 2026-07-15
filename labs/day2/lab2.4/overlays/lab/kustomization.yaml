@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ckad/traffic-ingest
+    newName: 10.206.0.3:5000/traffic-ingest
+    newTag: lab-v2
+replicas:
+  - name: traffic-kustomize
+    count: 3
+labels:
+  - pairs:
+      environment: lab
+      managed-by: kustomize

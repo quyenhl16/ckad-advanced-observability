@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: traffic-pod-60
+  namespace: ckad-labs
+  labels:
+    app: traffic-pod-60
+    tier: lab
+spec:
+  restartPolicy: Never
+  containers:
+    - name: traffic-pod-60
+      image: ckad/traffic-ingest:local
+      env:
+        - name: HTTP_ADDR
+          value: :8080
+        - name: ANALYTICS_URL
+          value: http://analytics-engine.advanced-observability.svc.cluster.local:8081
+      resources:
+        requests:
+          cpu: 50m
+          memory: 32Mi
+        limits:
+          cpu: 250m
+          memory: 128Mi

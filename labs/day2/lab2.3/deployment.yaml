@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-hpa
+  namespace: ckad-labs
+  labels:
+    app: traffic-hpa
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: traffic-hpa}
+  template:
+    metadata:
+      labels: {app: traffic-hpa}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532}
+      containers:
+        - name: app
+          image: ckad/traffic-ingest:local
+          ports: [{name: http, containerPort: 8080}]
+          env:
+            - {name: HTTP_ADDR, value: ":8080"}
+            - {name: ANALYTICS_URL, value: "http://analytics-engine.advanced-observability.svc.cluster.local:8081"}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 3
