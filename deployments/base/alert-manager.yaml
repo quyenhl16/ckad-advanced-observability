@@ -39,12 +39,13 @@ spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20
       securityContext:
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        - name: wait-for-database
+        - name: config-init
           image: postgres:17-alpine
-          command: [sh, -c, 'until pg_isready -h observability-db -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done']
+          command: [sh, -c, 'sed "s/PUBLIC_PORT/8082/g; s/APP_PORT/18082/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log && until pg_isready -h observability-db -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done']
           env:
             - name: POSTGRES_USER
               valueFrom:
@@ -63,16 +64,20 @@ spec:
           resources:
             requests: {cpu: 10m, memory: 16Mi}
             limits: {cpu: 50m, memory: 64Mi}
+          volumeMounts:
+            - {name: proxy-template, mountPath: /templates, readOnly: true}
+            - {name: generated-config, mountPath: /generated}
+            - {name: shared-logs, mountPath: /logs}
       containers:
         - name: app
           image: ckad/alert-manager:local
           imagePullPolicy: IfNotPresent
           ports:
-            - name: http
-              containerPort: 8082
+            - name: app-http
+              containerPort: 18082
           env:
             - name: HTTP_ADDR
-              value: :8082
+              value: :18082
             - name: ALERT_API_KEY
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: ALERT_API_KEY}
@@ -120,16 +125,56 @@ spec:
             requests: {cpu: 50m, memory: 32Mi}
             limits: {cpu: 250m, memory: 128Mi}
           readinessProbe:
-            httpGet: {path: /health/ready, port: http}
+            httpGet: {path: /health/ready, port: app-http}
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
-            httpGet: {path: /health/live, port: http}
+            httpGet: {path: /health/live, port: app-http}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 2
           startupProbe:
-            httpGet: {path: /health/live, port: http}
+            httpGet: {path: /health/live, port: app-http}
             periodSeconds: 2
             failureThreshold: 20
+        - name: log-sidecar
+          image: busybox:1.37
+          command: [sh, -c, 'tail -n+1 -F /logs/access.log']
+          resources:
+            requests: {cpu: 5m, memory: 4Mi}
+            limits: {cpu: 25m, memory: 16Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: shared-logs, mountPath: /logs, readOnly: true}
+        - name: nginx-ambassador
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
+          ports:
+            - {name: http, containerPort: 8082}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: generated-config, mountPath: /config, readOnly: true}
+            - {name: shared-logs, mountPath: /var/log/shared}
+            - {name: nginx-tmp, mountPath: /tmp}
+      volumes:
+        - name: proxy-template
+          configMap: {name: nginx-proxy-template, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
+        - {name: generated-config, emptyDir: {}}
+        - {name: shared-logs, emptyDir: {}}
+        - {name: nginx-tmp, emptyDir: {}}

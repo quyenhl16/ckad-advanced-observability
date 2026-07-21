@@ -45,18 +45,34 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: config-init
+          image: busybox:1.37
+          command: [sh, -c, 'sed "s/PUBLIC_PORT/8081/g; s/APP_PORT/18081/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log /events/events.jsonl']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 5m, memory: 4Mi}
+            limits: {cpu: 25m, memory: 16Mi}
+          volumeMounts:
+            - {name: proxy-template, mountPath: /templates, readOnly: true}
+            - {name: generated-config, mountPath: /generated}
+            - {name: shared-logs, mountPath: /logs}
+            - {name: analytics-logs, mountPath: /events}
       containers:
         - name: app
           image: ckad/analytics-engine:local
           imagePullPolicy: IfNotPresent
           ports:
-            - name: http
-              containerPort: 8081
+            - name: app-http
+              containerPort: 18081
           envFrom:
             - configMapRef: {name: observability-config}
           env:
             - name: HTTP_ADDR
-              value: :8081
+              value: :18081
             - name: ANALYTICS_LOG_PATH
               value: /var/log/analytics/events.jsonl
             - name: ALERT_API_KEY
@@ -71,26 +87,26 @@ spec:
             requests: {cpu: 50m, memory: 32Mi}
             limits: {cpu: 250m, memory: 128Mi}
           readinessProbe:
-            httpGet: {path: /health/ready, port: http}
+            httpGet: {path: /health/ready, port: app-http}
             initialDelaySeconds: 2
             periodSeconds: 5
             timeoutSeconds: 2
           livenessProbe:
-            httpGet: {path: /health/live, port: http}
+            httpGet: {path: /health/live, port: app-http}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 2
           startupProbe:
-            httpGet: {path: /health/live, port: http}
+            httpGet: {path: /health/live, port: app-http}
             periodSeconds: 2
             failureThreshold: 15
           volumeMounts:
             - name: analytics-logs
               mountPath: /var/log/analytics
-        - name: log-collector
+        - name: log-sidecar
           image: busybox:1.37
           imagePullPolicy: IfNotPresent
-          command: [sh, -c, "until [ -f /logs/events.jsonl ]; do sleep 1; done; tail -n+1 -F /logs/events.jsonl"]
+          command: [sh, -c, "tail -n+1 -F /logs/access.log /events/events.jsonl"]
           resources:
             requests: {cpu: 10m, memory: 8Mi}
             limits: {cpu: 50m, memory: 32Mi}
@@ -102,9 +118,29 @@ spec:
             capabilities:
               drop: [ALL]
           volumeMounts:
-            - name: analytics-logs
-              mountPath: /logs
-              readOnly: true
+            - {name: shared-logs, mountPath: /logs, readOnly: true}
+            - {name: analytics-logs, mountPath: /events, readOnly: true}
+        - name: nginx-ambassador
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
+          ports:
+            - {name: http, containerPort: 8081}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: generated-config, mountPath: /config, readOnly: true}
+            - {name: shared-logs, mountPath: /var/log/shared}
+            - {name: nginx-tmp, mountPath: /tmp}
       volumes:
         - name: analytics-logs
           emptyDir: {}
+        - name: proxy-template
+          configMap: {name: nginx-proxy-template, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
+        - {name: generated-config, emptyDir: {}}
+        - {name: shared-logs, emptyDir: {}}
+        - {name: nginx-tmp, emptyDir: {}}

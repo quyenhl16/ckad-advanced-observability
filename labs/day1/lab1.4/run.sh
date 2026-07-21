@@ -7,15 +7,9 @@ readonly NAMESPACE="ckad-labs"
 
 kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
 
-for index in 1 2 3 4 5; do
-  kubectl delete pod "label-client-${index}" -n "$NAMESPACE" --ignore-not-found
-  kubectl run "label-client-${index}" \
-    -n "$NAMESPACE" \
-    --image=busybox:1.37 \
-    --restart=Never \
-    --labels="app=label-client,environment=test,index=${index}" \
-    --command -- sleep 3600
-done
+kubectl delete pods -n "$NAMESPACE" -l app=label-client --ignore-not-found
+kubectl apply -f "${LAB_DIR}/pods.yaml"
+kubectl wait --for=condition=Ready pods -n "$NAMESPACE" -l app=label-client --timeout=120s
 
 kubectl get pods -n "$NAMESPACE" -l app=label-client --show-labels
 kubectl label pods -n "$NAMESPACE" -l app=label-client \

@@ -1,7 +1,8 @@
 # Lab 1.2 - Init and Sidecar Pattern
 
-This Pod initializes a shared log file, runs the analytics application, and
-tails the file from a sidecar. All three containers share one `emptyDir`.
+This Pod renders proxy configuration in an init container, runs analytics on
+an internal port, tails shared application and proxy logs from a sidecar, and
+exposes the Pod through an Nginx ambassador.
 
 ```bash
 ./labs/day1/lab1.2/run.sh
@@ -10,7 +11,7 @@ tails the file from a sidecar. All three containers share one `emptyDir`.
 In one terminal:
 
 ```bash
-kubectl logs -n ckad-labs analytics-pattern -c log-collector -f
+kubectl logs -n ckad-labs analytics-pattern -c log-sidecar -f
 ```
 
 In another terminal, expose the analytics Pod and submit a normal metric:

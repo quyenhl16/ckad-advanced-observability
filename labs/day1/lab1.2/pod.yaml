@@ -16,21 +16,23 @@ spec:
     seccompProfile:
       type: RuntimeDefault
   initContainers:
-    - name: init-log
+    - name: config-init
       image: busybox:1.37
-      command: [sh, -c, 'touch /logs/events.jsonl && chmod 664 /logs/events.jsonl']
+      command: [sh, -c, 'sed "s/PUBLIC_PORT/8081/g; s/APP_PORT/18081/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log /events/events.jsonl']
       volumeMounts:
-        - name: analytics-logs
-          mountPath: /logs
+        - {name: proxy-template, mountPath: /templates, readOnly: true}
+        - {name: generated-config, mountPath: /generated}
+        - {name: shared-logs, mountPath: /logs}
+        - {name: analytics-logs, mountPath: /events}
   containers:
     - name: app
       image: ckad/analytics-engine:local
       ports:
-        - name: http
-          containerPort: 8081
+        - name: app-http
+          containerPort: 18081
       env:
         - name: HTTP_ADDR
-          value: :8081
+          value: :18081
         - name: ANALYTICS_LOG_PATH
           value: /var/log/analytics/events.jsonl
         - name: LATENCY_THRESHOLD_MS
@@ -47,18 +49,33 @@ spec:
       volumeMounts:
         - name: analytics-logs
           mountPath: /var/log/analytics
-    - name: log-collector
+    - name: log-sidecar
       image: busybox:1.37
-      command: [sh, -c, 'tail -n+1 -F /logs/events.jsonl']
+      command: [sh, -c, 'tail -n+1 -F /logs/access.log /events/events.jsonl']
       resources:
         requests: {cpu: 10m, memory: 8Mi}
         limits: {cpu: 50m, memory: 32Mi}
       securityContext:
         allowPrivilegeEscalation: false
       volumeMounts:
-        - name: analytics-logs
-          mountPath: /logs
-          readOnly: true
+        - {name: shared-logs, mountPath: /logs, readOnly: true}
+        - {name: analytics-logs, mountPath: /events, readOnly: true}
+    - name: nginx-ambassador
+      image: nginxinc/nginx-unprivileged:1.27-alpine
+      command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
+      ports: [{name: http, containerPort: 8081}]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+      volumeMounts:
+        - {name: generated-config, mountPath: /config, readOnly: true}
+        - {name: shared-logs, mountPath: /var/log/shared}
+        - {name: nginx-tmp, mountPath: /tmp}
   volumes:
     - name: analytics-logs
       emptyDir: {}
+    - name: proxy-template
+      configMap: {name: pod-pattern-config, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
+    - {name: generated-config, emptyDir: {}}
+    - {name: shared-logs, emptyDir: {}}
+    - {name: nginx-tmp, emptyDir: {}}

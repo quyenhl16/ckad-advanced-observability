@@ -110,6 +110,11 @@ Open `http://localhost:8083` and send test traffic to
 
 ## Workload notes
 
+- Every Go application Pod uses four roles: a completed `config-init`, the
+  main `app`, a `log-sidecar`, and an `nginx-ambassador`. Services target Nginx
+  on ports 8080-8083; applications listen internally on ports 18080-18083.
+- The log sidecar tails Nginx access logs from a shared `emptyDir`. The Go
+  process continues to emit its structured application logs to stdout.
 - `analytics-engine` intentionally has one replica because its query API reads
   a Pod-local `emptyDir`. Scale it only after logs are moved to centralized
   storage.

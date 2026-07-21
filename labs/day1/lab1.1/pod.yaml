@@ -8,12 +8,21 @@ metadata:
     tier: lab
 spec:
   restartPolicy: Never
+  securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532}
+  initContainers:
+    - name: config-init
+      image: busybox:1.37
+      command: [sh, -c, 'sed "s/PUBLIC_PORT/8080/g; s/APP_PORT/18080/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log']
+      volumeMounts:
+        - {name: proxy-template, mountPath: /templates, readOnly: true}
+        - {name: generated-config, mountPath: /generated}
+        - {name: shared-logs, mountPath: /logs}
   containers:
-    - name: traffic-pod-60
+    - name: app
       image: ckad/traffic-ingest:local
       env:
         - name: HTTP_ADDR
-          value: :8080
+          value: :18080
         - name: ANALYTICS_URL
           value: http://analytics-engine.advanced-observability.svc.cluster.local:8081
       resources:
@@ -23,3 +32,28 @@ spec:
         limits:
           cpu: 250m
           memory: 128Mi
+    - name: log-sidecar
+      image: busybox:1.37
+      command: [sh, -c, 'tail -n+1 -F /logs/access.log']
+      resources:
+        requests: {cpu: 5m, memory: 4Mi}
+        limits: {cpu: 25m, memory: 16Mi}
+      volumeMounts:
+        - {name: shared-logs, mountPath: /logs, readOnly: true}
+    - name: nginx-ambassador
+      image: nginxinc/nginx-unprivileged:1.27-alpine
+      command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
+      ports: [{name: http, containerPort: 8080}]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+      volumeMounts:
+        - {name: generated-config, mountPath: /config, readOnly: true}
+        - {name: shared-logs, mountPath: /var/log/shared}
+        - {name: nginx-tmp, mountPath: /tmp}
+  volumes:
+    - name: proxy-template
+      configMap: {name: pod-pattern-config, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
+    - {name: generated-config, emptyDir: {}}
+    - {name: shared-logs, emptyDir: {}}
+    - {name: nginx-tmp, emptyDir: {}}

@@ -14,6 +14,38 @@ data:
   ALERT_REPOSITORY: postgres
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-proxy-template
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/part-of: advanced-observability
+data:
+  nginx.conf.template: |
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr warn;
+    events {}
+    http {
+      access_log /var/log/shared/access.log;
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path /tmp/proxy_temp;
+      fastcgi_temp_path /tmp/fastcgi_temp;
+      uwsgi_temp_path /tmp/uwsgi_temp;
+      scgi_temp_path /tmp/scgi_temp;
+      server {
+        listen PUBLIC_PORT;
+        location / {
+          proxy_pass http://127.0.0.1:APP_PORT;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+      }
+    }
+---
+apiVersion: v1
 kind: Secret
 metadata:
   name: observability-secrets

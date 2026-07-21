@@ -19,4 +19,4 @@ kubectl get pod analytics-pattern -n "$NAMESPACE" \
   -o jsonpath='{range .spec.initContainers[*]}init={.name}{"\n"}{end}{range .spec.containers[*]}container={.name}{"\n"}{end}'
 
 printf '\nTail the sidecar with:\n'
-printf 'kubectl logs -n %s analytics-pattern -c log-collector -f\n' "$NAMESPACE"
+printf 'kubectl logs -n %s analytics-pattern -c log-sidecar -f\n' "$NAMESPACE"
