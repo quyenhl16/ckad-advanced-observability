@@ -31,6 +31,24 @@ Start with Day 1. Day 2 scripts use separate names such as `traffic-rollout`,
 `traffic-bg-blue`, and `traffic-hpa`, so Service selectors from the live
 application do not select lab Pods.
 
+Day 3 covers the Application Environment, Configuration & Security domain:
+
+- Lab 3.1: Secret from file, ConfigMap from literal, env and volume injection.
+- Lab 3.2: non-root security context, read-only root filesystem, dropped
+  capabilities, and disabled privilege escalation.
+- Lab 3.3: ServiceAccount, Role, RoleBinding, and an in-Pod Kubernetes API call.
+- Lab 3.4: LimitRange defaults and ResourceQuota admission rejection in an
+  isolated namespace.
+
+Run a complete Day 3 lab with its default `run` action, for example:
+
+```bash
+./labs/day3/lab3.1/run.sh
+./labs/day3/lab3.2/run.sh
+./labs/day3/lab3.3/run.sh
+./labs/day3/lab3.4/run.sh
+```
+
 Clean all namespaced lab resources when finished:
 
 ```bash

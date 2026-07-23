@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: config-injection
+  namespace: ckad-labs
+  labels: {app: config-injection, lab: "3.1"}
+spec:
+  restartPolicy: Never
+  securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532}
+  initContainers:
+    - name: config-init
+      image: busybox:1.37
+      command: [sh, -c, 'sed "s/PUBLIC_PORT/8080/g; s/APP_PORT/18080/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log']
+      resources: {requests: {cpu: 5m, memory: 4Mi}, limits: {cpu: 25m, memory: 16Mi}}
+      volumeMounts:
+        - {name: proxy-template, mountPath: /templates, readOnly: true}
+        - {name: generated-config, mountPath: /generated}
+        - {name: shared-logs, mountPath: /logs}
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: [sh, -c]
+      args:
+        - |
+          secret_state=missing
+          [ -n "$API_KEY" ] && secret_state=loaded
+          printf 'mode=%s\nsecret=%s\n' "$(cat /config/APP_MODE)" "$secret_state" > /www/index.html
+          exec httpd -f -p 18080 -h /www
+      env:
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef: {name: lab3-1-secret, key: api-key}
+      ports: [{name: app-http, containerPort: 18080}]
+      resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 50m, memory: 32Mi}}
+      volumeMounts:
+        - {name: app-config, mountPath: /config, readOnly: true}
+        - {name: web-content, mountPath: /www}
+    - name: log-sidecar
+      image: busybox:1.37
+      command: [sh, -c, 'tail -n+1 -F /logs/access.log']
+      resources: {requests: {cpu: 5m, memory: 4Mi}, limits: {cpu: 25m, memory: 16Mi}}
+      volumeMounts: [{name: shared-logs, mountPath: /logs, readOnly: true}]
+    - name: nginx-ambassador
+      image: nginxinc/nginx-unprivileged:1.27-alpine
+      command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
+      ports: [{name: http, containerPort: 8080}]
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+      volumeMounts:
+        - {name: generated-config, mountPath: /config, readOnly: true}
+        - {name: shared-logs, mountPath: /var/log/shared}
+        - {name: nginx-tmp, mountPath: /tmp}
+  volumes:
+    - name: proxy-template
+      configMap: {name: pod-pattern-config, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
+    - name: app-config
+      configMap: {name: lab3-1-config}
+    - {name: generated-config, emptyDir: {}}
+    - {name: shared-logs, emptyDir: {}}
+    - {name: web-content, emptyDir: {}}
+    - {name: nginx-tmp, emptyDir: {}}
