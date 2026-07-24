@@ -20,7 +20,9 @@ spec:
         - {name: shared-logs, mountPath: /logs}
   containers:
     - name: app
-      image: curlimages/curl:8.10.1
+      # curl-base keeps the Alpine/BusyBox utilities needed by the app's
+      # embedded HTTP server; the minimal curl image does not provide them.
+      image: curlimages/curl-base:8.21.0
       command: [sh, -c]
       args:
         - |
