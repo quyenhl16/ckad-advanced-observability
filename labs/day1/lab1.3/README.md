@@ -19,3 +19,9 @@ kubectl get job,cronjob,pod -n ckad-labs
 kubectl logs -n ckad-labs job/metric-once
 kubectl get jobs -n ckad-labs --sort-by=.metadata.creationTimestamp
 ```
+
+Cleanup removes both the one-off Job and CronJob:
+
+```bash
+./labs/day1/lab1.3/run.sh cleanup
+```

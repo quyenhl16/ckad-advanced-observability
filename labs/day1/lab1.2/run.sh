@@ -4,8 +4,18 @@ set -Eeuo pipefail
 readonly LAB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
+ACTION="${1:-run}"
 
 source "${ROOT_DIR}/labs/common/images.sh"
+
+case "$ACTION" in
+  cleanup)
+    kubectl delete pod analytics-pattern -n "$NAMESPACE" --ignore-not-found
+    exit 0
+    ;;
+  run) ;;
+  *) printf 'Usage: %s {run|cleanup}\n' "$0" >&2; exit 1 ;;
+esac
 
 kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
 

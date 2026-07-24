@@ -22,3 +22,9 @@ curl -X POST http://127.0.0.1:18081/internal/v1/analyze \
   -H 'Content-Type: application/json' \
   -d '{"device_type":"router","device_id":"lab-sidecar","cpu_usage_percent":30,"memory_usage_percent":40,"temperature_celsius":45,"latency_ms":80,"packet_loss_percent":0}'
 ```
+
+Cleanup:
+
+```bash
+./labs/day1/lab1.2/run.sh cleanup
+```

@@ -18,3 +18,9 @@ kubectl logs traffic-pod-60 -n ckad-labs -c app
 
 The image-resolved manifest is written to `/tmp/lab1.1-pod.yaml`; `pod.yaml`
 is the checked-in reference.
+
+Cleanup:
+
+```bash
+./labs/day1/lab1.1/run.sh cleanup
+```

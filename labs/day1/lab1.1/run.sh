@@ -5,8 +5,19 @@ readonly LAB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
 readonly GENERATED_MANIFEST="/tmp/lab1.1-pod.yaml"
+ACTION="${1:-run}"
 
 source "${ROOT_DIR}/labs/common/images.sh"
+
+case "$ACTION" in
+  cleanup)
+    kubectl delete pod traffic-pod-60 -n "$NAMESPACE" --ignore-not-found
+    rm -f "$GENERATED_MANIFEST"
+    exit 0
+    ;;
+  run) ;;
+  *) printf 'Usage: %s {run|cleanup}\n' "$0" >&2; exit 1 ;;
+esac
 
 kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
 

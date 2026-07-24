@@ -14,3 +14,9 @@ kubectl get pods -n ckad-labs -l 'index in (1,3,5)'
 kubectl get pods -n ckad-labs -l 'environment!=production'
 kubectl get pods -n ckad-labs -l app=label-client --show-labels
 ```
+
+Cleanup:
+
+```bash
+./labs/day1/lab1.4/run.sh cleanup
+```
