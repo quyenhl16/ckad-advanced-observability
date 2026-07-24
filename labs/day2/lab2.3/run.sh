@@ -35,10 +35,12 @@ case "$ACTION" in
     kubectl apply -f "${LAB_DIR}/hpa.yaml"
     kubectl apply -f "${LAB_DIR}/load-generator.yaml"
     kubectl set env deployment/hpa-load-generator -n "$NAMESPACE" \
-      "WORKERS=${WORKERS:-16}"
+      "WORKERS=${WORKERS:-32}"
+    kubectl scale deployment/hpa-load-generator -n "$NAMESPACE" \
+      --replicas="${LOAD_REPLICAS:-3}"
     kubectl rollout status deployment/hpa-load-generator -n "$NAMESPACE" --timeout=120s
-    printf 'Load started with %s workers. Run \"%s watch\" in another terminal.\n' \
-      "${WORKERS:-16}" "$0"
+    printf 'Load started with %s replicas x %s workers. Run \"%s watch\" in another terminal.\n' \
+      "${LOAD_REPLICAS:-3}" "${WORKERS:-32}" "$0"
     ;;
   stop-load)
     kubectl delete deployment hpa-load-generator -n "$NAMESPACE" --ignore-not-found
@@ -46,10 +48,23 @@ case "$ACTION" in
     ;;
   watch)
     printf 'Watching HPA and target Pods; press Ctrl-C to stop.\n'
-    kubectl get hpa,pods -n "$NAMESPACE" -l app=traffic-hpa -w
+    while true; do
+      printf '\033[H\033[2J'
+      date
+      printf '\nHPA:\n'
+      kubectl get hpa traffic-hpa -n "$NAMESPACE"
+      printf '\nTarget Pods:\n'
+      kubectl get pods -n "$NAMESPACE" -l app=traffic-hpa -o wide
+      printf '\nCPU by container:\n'
+      kubectl top pods -n "$NAMESPACE" -l app=traffic-hpa --containers 2>/dev/null || \
+        printf 'Metrics unavailable; verify Metrics Server.\n'
+      sleep 2
+    done
     ;;
   status)
-    kubectl get deployment,pods,hpa -n "$NAMESPACE" -l app=traffic-hpa
+    kubectl get deployment traffic-hpa -n "$NAMESPACE"
+    kubectl get pods -n "$NAMESPACE" -l app=traffic-hpa -o wide
+    kubectl get hpa traffic-hpa -n "$NAMESPACE"
     kubectl get deployment hpa-load-generator -n "$NAMESPACE" 2>/dev/null || true
     kubectl top pods -n "$NAMESPACE" -l app=traffic-hpa --containers 2>/dev/null || \
       printf 'Pod metrics unavailable; verify Metrics Server.\n'

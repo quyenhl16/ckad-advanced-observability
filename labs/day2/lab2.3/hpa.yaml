@@ -31,10 +31,9 @@ spec:
           value: 1
           periodSeconds: 30
   metrics:
-    - type: ContainerResource
-      containerResource:
+    - type: Resource
+      resource:
         name: cpu
-        container: app
         target:
           type: Utilization
-          averageUtilization: 30
+          averageUtilization: 25

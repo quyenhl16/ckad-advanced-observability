@@ -6,7 +6,7 @@ metadata:
   labels:
     app: hpa-load-generator
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: hpa-load-generator
@@ -32,7 +32,7 @@ spec:
           args:
             - |
               until wget -qO- http://127.0.0.1:8080/health/live >/dev/null; do sleep 1; done
-              workers="${WORKERS:-16}"
+              workers="${WORKERS:-32}"
               echo "starting ${workers} load workers" >> /logs/load.log
               for worker in $(seq 1 "$workers"); do
                 while true; do
@@ -41,8 +41,8 @@ spec:
               done
               wait
           env:
-            - {name: WORKERS, value: "16"}
-          resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 100m, memory: 32Mi}}
+            - {name: WORKERS, value: "32"}
+          resources: {requests: {cpu: 25m, memory: 8Mi}, limits: {cpu: 500m, memory: 32Mi}}
           volumeMounts: [{name: shared-logs, mountPath: /logs}]
         - name: log-sidecar
           image: busybox:1.37
@@ -53,7 +53,7 @@ spec:
           image: nginxinc/nginx-unprivileged:1.27-alpine
           command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
           ports: [{name: http, containerPort: 8080}]
-          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+          resources: {requests: {cpu: 25m, memory: 16Mi}, limits: {cpu: 500m, memory: 64Mi}}
           volumeMounts:
             - {name: generated-config, mountPath: /config, readOnly: true}
             - {name: shared-logs, mountPath: /var/log/shared}

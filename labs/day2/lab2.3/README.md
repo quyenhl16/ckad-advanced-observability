@@ -1,13 +1,15 @@
 # Lab 2.3 - Observable HPA Scale Up and Down
 
 This lab uses a cloned Deployment with CPU requests and an
-`autoscaling/v2` HPA. The metric targets only the `app` container, so CPU from
-the logging sidecar and Nginx ambassador does not distort the decision.
+`autoscaling/v2` HPA. The CPU resource metric covers the entire multi-container
+Pod: app, logging sidecar, and Nginx ambassador. This makes proxying and log
+processing visible in the scaling decision instead of measuring only the very
+lightweight Go health handler.
 
-The HPA keeps 2-10 replicas and targets 30% of the app container's `50m` CPU
-request. Scale-up has no stabilization delay and may add two Pods or double the
-replica count every 15 seconds. Scale-down waits for 60 seconds of stable low
-usage, then removes at most one Pod every 30 seconds.
+The HPA keeps 2-10 replicas and targets 25% CPU utilization. Scale-up has no
+stabilization delay and may add two Pods or double the replica count every 15
+seconds. Scale-down waits for 60 seconds of stable low usage, then removes at
+most one Pod every 30 seconds.
 
 ## Run the experiment
 
@@ -17,10 +19,11 @@ usage, then removes at most one Pod every 30 seconds.
 ./labs/day2/lab2.3/run.sh load
 ```
 
-Increase the load when necessary:
+The default generator uses 3 Pods with 32 workers each. Increase it when
+necessary:
 
 ```bash
-WORKERS=32 ./labs/day2/lab2.3/run.sh load
+LOAD_REPLICAS=5 WORKERS=64 ./labs/day2/lab2.3/run.sh load
 ```
 
 In another terminal:
@@ -49,7 +52,9 @@ kubectl describe hpa traffic-hpa -n ckad-labs
 The existing `scale` action remains available for a manual-scaling comparison,
 but an active HPA will subsequently override that replica count.
 
-If HPA shows `<unknown>/30%`, install or repair Metrics Server. Cleanup removes
+Metrics Server normally needs several scrape/sync intervals, so allow 30-90
+seconds for the first scale-up. If HPA shows `<unknown>/25%`, install or repair
+Metrics Server. Cleanup removes
 the target Deployment, Service, HPA, and load generator:
 
 ```bash
