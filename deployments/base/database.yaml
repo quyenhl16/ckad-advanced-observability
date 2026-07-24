@@ -97,6 +97,7 @@ spec:
           app.kubernetes.io/part-of: advanced-observability
       spec:
         accessModes: [ReadWriteOnce]
+        storageClassName: observability-local
         resources:
           requests:
             storage: 1Gi

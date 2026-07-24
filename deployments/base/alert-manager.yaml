@@ -45,7 +45,7 @@ spec:
       initContainers:
         - name: config-init
           image: postgres:17-alpine
-          command: [sh, -c, 'sed "s/PUBLIC_PORT/8082/g; s/APP_PORT/18082/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log && until pg_isready -h observability-db -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done']
+          command: [sh, -c, 'sed "s/PUBLIC_PORT/8082/g; s/APP_PORT/18082/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log && chgrp 65532 /logs/access.log && chmod 0664 /logs/access.log && until pg_isready -h observability-db -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done']
           env:
             - name: POSTGRES_USER
               valueFrom:

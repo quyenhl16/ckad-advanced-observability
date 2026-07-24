@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - config.yaml
+  - postgres-pv.yaml
   - database.yaml
   - traffic-ingest.yaml
   - analytics-engine.yaml

@@ -88,6 +88,20 @@ keys in `observability-secrets`.
 
 ## 3. Apply and verify
 
+The base uses a static local PersistentVolume on the node whose hostname is
+`node-2`. Before applying the manifests, create its backing directory on that
+node:
+
+```bash
+sudo install -d -o 70 -g 70 -m 700 /var/lib/observability-postgres
+kubectl get node node-2
+```
+
+If the database should run on another node, change the hostname under
+`spec.nodeAffinity` in `base/postgres-pv.yaml` and create the same directory on
+that node. A local PV ties PostgreSQL to that node; it does not provide storage
+replication.
+
 ```powershell
 kubectl apply -k deployments/base
 kubectl get pods,svc,pvc -n advanced-observability
@@ -119,7 +133,9 @@ Open `http://localhost:8083` and send test traffic to
   a Pod-local `emptyDir`. Scale it only after logs are moved to centralized
   storage.
 - PostgreSQL uses one replica and a `ReadWriteOnce` PVC. This demonstrates
-  persistence, not database high availability.
+  persistence, not database high availability. Its static local PV has the
+  `Retain` reclaim policy, so deleting the namespace does not erase the files
+  under `/var/lib/observability-postgres`.
 - NetworkPolicies require a CNI implementation that enforces them.
 - The traffic-ingest PodDisruptionBudget keeps one of its two replicas
   available during voluntary disruptions.
