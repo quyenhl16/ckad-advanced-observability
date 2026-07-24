@@ -20,26 +20,62 @@ spec:
         - {name: shared-logs, mountPath: /logs}
   containers:
     - name: app
-      # curl-base keeps the Alpine/BusyBox utilities needed by the app's
-      # embedded HTTP server; the minimal curl image does not provide them.
-      image: curlimages/curl-base:8.21.0
-      command: [sh, -c]
+      image: python:3.13-alpine
+      command: [python, -u, -c]
       args:
         - |
-          token_file=/var/run/secrets/kubernetes.io/serviceaccount/token
-          ca_file=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-          namespace_file=/var/run/secrets/kubernetes.io/serviceaccount/namespace
-          namespace=$(cat "$namespace_file")
-          api="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS:-443}"
-          while true; do
-            if curl --fail --silent --show-error --cacert "$ca_file" \
-              -H "Authorization: Bearer $(cat "$token_file")" \
-              "$api/api/v1/namespaces/$namespace/pods" -o /www/pods.json.tmp; then
-              mv /www/pods.json.tmp /www/pods.json
-            fi
-            sleep 15
-          done &
-          exec /bin/busybox httpd -f -p 18080 -h /www
+          import functools
+          import http.server
+          import os
+          import ssl
+          import threading
+          import time
+          import urllib.request
+
+          service_account_dir = "/var/run/secrets/kubernetes.io/serviceaccount"
+          token_file = f"{service_account_dir}/token"
+          ca_file = f"{service_account_dir}/ca.crt"
+          with open(f"{service_account_dir}/namespace", encoding="utf-8") as stream:
+              namespace = stream.read().strip()
+
+          api_host = os.environ["KUBERNETES_SERVICE_HOST"]
+          if ":" in api_host and not api_host.startswith("["):
+              api_host = f"[{api_host}]"
+          api_port = os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
+          api_url = f"https://{api_host}:{api_port}/api/v1/namespaces/{namespace}/pods"
+          tls_context = ssl.create_default_context(cafile=ca_file)
+
+          def refresh_pod_list():
+              while True:
+                  try:
+                      with open(token_file, encoding="utf-8") as stream:
+                          token = stream.read().strip()
+                      request = urllib.request.Request(
+                          api_url,
+                          headers={"Authorization": f"Bearer {token}"},
+                      )
+                      with urllib.request.urlopen(
+                          request,
+                          context=tls_context,
+                          timeout=10,
+                      ) as response:
+                          payload = response.read()
+                      temporary_file = "/www/pods.json.tmp"
+                      with open(temporary_file, "wb") as stream:
+                          stream.write(payload)
+                      os.replace(temporary_file, "/www/pods.json")
+                      print(f"refreshed PodList ({len(payload)} bytes)", flush=True)
+                  except Exception as error:
+                      print(f"failed to refresh PodList: {error}", flush=True)
+                  time.sleep(15)
+
+          threading.Thread(target=refresh_pod_list, daemon=True).start()
+          handler = functools.partial(
+              http.server.SimpleHTTPRequestHandler,
+              directory="/www",
+          )
+          server = http.server.ThreadingHTTPServer(("0.0.0.0", 18080), handler)
+          server.serve_forever()
       ports: [{name: app-http, containerPort: 18080}]
       securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}

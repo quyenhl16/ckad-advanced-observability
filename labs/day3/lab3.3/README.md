@@ -15,14 +15,16 @@ Nginx ambassador.
 The Role grants only `get` and `list` on Pods. Verification also confirms that
 the ServiceAccount cannot read Secrets.
 
-The application uses `curlimages/curl-base` because it contains both `curl`
-for the authenticated Kubernetes API call and BusyBox `httpd` for serving the
-result to the Nginx ambassador. The minimal `curlimages/curl` image does not
-contain `/bin/busybox` and exits with code `127` if used here.
+The application uses only Python's standard library. It validates the API
+server certificate with the mounted ServiceAccount CA, reads the rotating
+token before each request, writes the PodList to the shared web directory, and
+serves that directory on port `18080` for the Nginx ambassador. This avoids
+depending on `curl` images that do not include an HTTP server binary.
 
 ```bash
 kubectl auth can-i list pods --as=system:serviceaccount:ckad-labs:pod-reader -n ckad-labs
 kubectl auth can-i get secrets --as=system:serviceaccount:ckad-labs:pod-reader -n ckad-labs
+kubectl logs -n ckad-labs rbac-api-client -c app
 kubectl logs -n ckad-labs rbac-api-client -c log-sidecar
 ./labs/day3/lab3.3/run.sh cleanup
 ```
