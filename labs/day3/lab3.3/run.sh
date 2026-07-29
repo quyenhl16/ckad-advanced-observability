@@ -7,11 +7,15 @@ readonly NAMESPACE="ckad-labs"
 readonly POD="rbac-api-client"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 deploy() {
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
   kubectl apply -f "${LAB_DIR}/rbac.yaml"
+  IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
   kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
-  kubectl apply -f "${LAB_DIR}/pod.yaml"
+  sed "s|ckad/traffic-ingest:local|${IMAGE}|" "${LAB_DIR}/pod.yaml" | kubectl apply -f -
   kubectl wait --for=condition=Ready pod/"$POD" -n "$NAMESPACE" --timeout=120s
 }
 
@@ -21,12 +25,12 @@ verify() {
 
   local attempt
   for attempt in $(seq 1 30); do
-    if kubectl exec -n "$NAMESPACE" "$POD" -c app -- \
-      python -c 'import os; assert os.path.getsize("/www/pods.json") > 0' 2>/dev/null; then
-      kubectl exec -n "$NAMESPACE" "$POD" -c app -- \
-        python -c 'import urllib.request; assert urllib.request.urlopen("http://127.0.0.1:8080/pods.json", timeout=5).read()' \
+    if kubectl exec -n "$NAMESPACE" "$POD" -c api-client -- \
+      python -c 'import os; assert os.path.getsize("/api-data/pods.json") > 0' 2>/dev/null; then
+      kubectl exec -n "$NAMESPACE" "$POD" -c api-client -- \
+        python -c 'import urllib.request; assert urllib.request.urlopen("http://127.0.0.1:8080/health/ready", timeout=5).read()' \
         >/dev/null
-      printf 'ServiceAccount listed Pods through the Kubernetes API; Secret access remains denied.\n'
+      printf 'ServiceAccount listed Pods through the Kubernetes API; application is healthy; Secret access remains denied.\n'
       return 0
     fi
     sleep 2

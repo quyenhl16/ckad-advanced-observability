@@ -10,18 +10,18 @@ spec:
   initContainers:
     - name: config-init
       image: busybox:1.37
-      command: [sh, -c, 'sed "s/PUBLIC_PORT/8080/g; s/APP_PORT/18080/g" /templates/nginx.conf.template > /generated/nginx.conf && echo quota-accepted > /www/index.html && touch /logs/access.log']
+      command: [sh, -c, 'sed "s/PUBLIC_PORT/8080/g; s/APP_PORT/18080/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log']
       volumeMounts:
         - {name: proxy-template, mountPath: /templates, readOnly: true}
         - {name: generated-config, mountPath: /generated}
         - {name: shared-logs, mountPath: /logs}
-        - {name: web-content, mountPath: /www}
   containers:
     - name: app
-      image: busybox:1.37
-      command: [httpd, -f, -p, "18080", -h, /www]
+      image: ckad/traffic-ingest:local
+      imagePullPolicy: IfNotPresent
+      env:
+        - {name: HTTP_ADDR, value: ":18080"}
       ports: [{name: app-http, containerPort: 18080}]
-      volumeMounts: [{name: web-content, mountPath: /www, readOnly: true}]
     - name: log-sidecar
       image: busybox:1.37
       command: [sh, -c, 'tail -n+1 -F /logs/access.log']
@@ -39,5 +39,4 @@ spec:
       configMap: {name: pod-pattern-config, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
     - {name: generated-config, emptyDir: {}}
     - {name: shared-logs, emptyDir: {}}
-    - {name: web-content, emptyDir: {}}
     - {name: nginx-tmp, emptyDir: {}}

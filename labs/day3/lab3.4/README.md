@@ -5,7 +5,9 @@ Configuration & Security (25%).
 
 Use a dedicated `ckad-quota-lab` namespace so quota experiments cannot block
 the other labs. A LimitRange injects default requests and limits into every
-container, while a ResourceQuota caps aggregate namespace resources.
+container, while a ResourceQuota caps aggregate namespace resources. Both Pod
+manifests use the deployed `traffic-ingest` service image for their `app`
+container.
 
 ```bash
 ./labs/day3/lab3.4/run.sh run

@@ -33,7 +33,7 @@ application do not select lab Pods.
 
 Day 3 covers the Application Environment, Configuration & Security domain:
 
-- Lab 3.1: Secret from file, ConfigMap from literal, env and volume injection.
+- Lab 3.1: declarative Secret and ConfigMap manifests, env and volume injection.
 - Lab 3.2: non-root security context, read-only root filesystem, dropped
   capabilities, and disabled privilege escalation.
 - Lab 3.3: ServiceAccount, Role, RoleBinding, and an in-Pod Kubernetes API call.

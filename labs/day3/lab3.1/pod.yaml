@@ -18,23 +18,20 @@ spec:
         - {name: shared-logs, mountPath: /logs}
   containers:
     - name: app
-      image: busybox:1.37
-      command: [sh, -c]
-      args:
-        - |
-          secret_state=missing
-          [ -n "$API_KEY" ] && secret_state=loaded
-          printf 'mode=%s\nsecret=%s\n' "$(cat /config/APP_MODE)" "$secret_state" > /www/index.html
-          exec httpd -f -p 18080 -h /www
+      image: ckad/traffic-ingest:local
+      imagePullPolicy: IfNotPresent
       env:
+        - {name: HTTP_ADDR, value: ":18080"}
+        - name: APP_MODE
+          valueFrom:
+            configMapKeyRef: {name: lab3-1-config, key: APP_MODE}
         - name: API_KEY
           valueFrom:
             secretKeyRef: {name: lab3-1-secret, key: api-key}
       ports: [{name: app-http, containerPort: 18080}]
-      resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 50m, memory: 32Mi}}
+      resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {cpu: 250m, memory: 128Mi}}
       volumeMounts:
         - {name: app-config, mountPath: /config, readOnly: true}
-        - {name: web-content, mountPath: /www}
     - name: log-sidecar
       image: busybox:1.37
       command: [sh, -c, 'tail -n+1 -F /logs/access.log']
@@ -56,5 +53,4 @@ spec:
       configMap: {name: lab3-1-config}
     - {name: generated-config, emptyDir: {}}
     - {name: shared-logs, emptyDir: {}}
-    - {name: web-content, emptyDir: {}}
     - {name: nginx-tmp, emptyDir: {}}

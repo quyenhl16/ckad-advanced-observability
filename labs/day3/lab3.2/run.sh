@@ -7,22 +7,27 @@ readonly NAMESPACE="ckad-labs"
 readonly POD="security-lockdown"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 deploy() {
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
+  IMAGE="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
   kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
-  kubectl apply -f "${LAB_DIR}/pod.yaml"
+  sed "s|ckad/traffic-ingest:local|${IMAGE}|" "${LAB_DIR}/pod.yaml" | kubectl apply -f -
   kubectl wait --for=condition=Ready pod/"$POD" -n "$NAMESPACE" --timeout=120s
 }
 
 verify() {
-  readonly uid="$(kubectl exec -n "$NAMESPACE" "$POD" -c app -- id -u)"
-  [[ "$uid" != "0" ]] || { printf 'App unexpectedly runs as root.\n' >&2; exit 1; }
-  if kubectl exec -n "$NAMESPACE" "$POD" -c app -- touch /rootfs-write-test 2>/dev/null; then
-    printf 'Unexpectedly wrote to the read-only root filesystem.\n' >&2
-    exit 1
-  fi
+  local uid rootfs
+  uid="$(kubectl exec -n "$NAMESPACE" "$POD" -c log-sidecar -- cat /evidence/uid)"
+  rootfs="$(kubectl exec -n "$NAMESPACE" "$POD" -c log-sidecar -- cat /evidence/rootfs)"
+  [[ "$uid" != "0" ]] || { printf 'Security check unexpectedly ran as root.\n' >&2; exit 1; }
+  [[ "$rootfs" == "read-only" ]] || { printf 'Root filesystem was unexpectedly writable.\n' >&2; exit 1; }
+  kubectl exec -n "$NAMESPACE" "$POD" -c log-sidecar -- \
+    wget -qO- http://127.0.0.1:8080/health/ready >/dev/null
   kubectl get pod "$POD" -n "$NAMESPACE" -o jsonpath='{range .spec.containers[*]}{.name}{" nonRoot="}{.securityContext.runAsNonRoot}{" readOnly="}{.securityContext.readOnlyRootFilesystem}{" noEscalation="}{.securityContext.allowPrivilegeEscalation}{" drop="}{.securityContext.capabilities.drop}{"\n"}{end}'
-  printf 'Verified non-root UID %s and blocked root-filesystem write.\n' "$uid"
+  printf 'Verified application health, non-root UID %s, and blocked root-filesystem write.\n' "$uid"
 }
 
 case "$ACTION" in

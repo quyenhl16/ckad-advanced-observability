@@ -16,7 +16,17 @@ spec:
   initContainers:
     - name: config-init
       image: busybox:1.37
-      command: [sh, -c, 'sed "s/PUBLIC_PORT/8080/g; s/APP_PORT/18080/g" /templates/nginx.conf.template > /generated/nginx.conf && echo locked-down > /www/index.html && touch /logs/access.log']
+      command: [sh, -c]
+      args:
+        - |
+          sed "s/PUBLIC_PORT/8080/g; s/APP_PORT/18080/g" /templates/nginx.conf.template > /generated/nginx.conf
+          touch /logs/access.log
+          id -u > /evidence/uid
+          if touch /tmp/rootfs-write-test 2>/dev/null; then
+            echo writable > /evidence/rootfs
+            exit 1
+          fi
+          echo read-only > /evidence/rootfs
       securityContext: &locked-down
         runAsNonRoot: true
         runAsUser: 65532
@@ -29,21 +39,24 @@ spec:
         - {name: proxy-template, mountPath: /templates, readOnly: true}
         - {name: generated-config, mountPath: /generated}
         - {name: shared-logs, mountPath: /logs}
-        - {name: web-content, mountPath: /www}
+        - {name: security-evidence, mountPath: /evidence}
   containers:
     - name: app
-      image: busybox:1.37
-      command: [httpd, -f, -p, "18080", -h, /www]
+      image: ckad/traffic-ingest:local
+      imagePullPolicy: IfNotPresent
+      env:
+        - {name: HTTP_ADDR, value: ":18080"}
       ports: [{name: app-http, containerPort: 18080}]
       securityContext: *locked-down
-      resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 50m, memory: 32Mi}}
-      volumeMounts: [{name: web-content, mountPath: /www, readOnly: true}]
+      resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {cpu: 250m, memory: 128Mi}}
     - name: log-sidecar
       image: busybox:1.37
       command: [sh, -c, 'tail -n+1 -F /logs/access.log']
       securityContext: *locked-down
       resources: {requests: {cpu: 5m, memory: 4Mi}, limits: {cpu: 25m, memory: 16Mi}}
-      volumeMounts: [{name: shared-logs, mountPath: /logs, readOnly: true}]
+      volumeMounts:
+        - {name: shared-logs, mountPath: /logs, readOnly: true}
+        - {name: security-evidence, mountPath: /evidence, readOnly: true}
     - name: nginx-ambassador
       image: nginxinc/nginx-unprivileged:1.27-alpine
       command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
@@ -59,5 +72,5 @@ spec:
       configMap: {name: pod-pattern-config, items: [{key: nginx.conf.template, path: nginx.conf.template}]}
     - {name: generated-config, emptyDir: {}}
     - {name: shared-logs, emptyDir: {}}
-    - {name: web-content, emptyDir: {}}
+    - {name: security-evidence, emptyDir: {}}
     - {name: nginx-tmp, emptyDir: {}}
