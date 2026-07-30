@@ -10,6 +10,10 @@ workloads. Day 1 resources and the cloned Day 2 workloads run in the
 - The application is running in `advanced-observability`.
 - The application images are reachable by every Kubernetes node.
 - Metrics Server is required only for Lab 2.3 HPA metrics.
+- An NGINX Ingress controller is required only for Lab 4.2.
+- A CNI that enforces NetworkPolicy is required only for Lab 4.3.
+- A default dynamic StorageClass, or an explicit `STORAGE_CLASS`, is required
+  only for Lab 4.4.
 
 Every lab directory contains a reference manifest and a `run.sh` exam-speed
 script. Make all scripts executable on CentOS:
@@ -47,6 +51,22 @@ Run a complete Day 3 lab with its default `run` action, for example:
 ./labs/day3/lab3.2/run.sh
 ./labs/day3/lab3.3/run.sh
 ./labs/day3/lab3.4/run.sh
+```
+
+Day 4 covers networking and persistent storage:
+
+- Lab 4.1: ClusterIP and NodePort Services, selector diagnosis, and Endpoints.
+- Lab 4.2: NGINX Ingress host/path routing to frontend and backend Services.
+- Lab 4.3: frontend-only backend ingress and deny-all backend egress policies.
+- Lab 4.4: dynamic 1 Gi PVC provisioning and data persistence across Pods.
+
+Run each complete Day 4 workflow with its default `run` action:
+
+```bash
+./labs/day4/lab4.1/run.sh
+./labs/day4/lab4.2/run.sh
+./labs/day4/lab4.3/run.sh
+./labs/day4/lab4.4/run.sh
 ```
 
 Clean all namespaced lab resources when finished:

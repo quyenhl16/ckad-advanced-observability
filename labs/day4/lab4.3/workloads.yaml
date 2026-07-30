@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-backend-content
+  namespace: ckad-labs
+  labels: {lab: "4.3"}
+data:
+  index.html: network-policy-backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-backend
+  namespace: ckad-labs
+  labels: {app: policy-backend, lab: "4.3"}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: policy-backend}
+  template:
+    metadata:
+      labels: {app: policy-backend, role: backend, lab: "4.3"}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532}
+      containers:
+        - name: backend
+          image: busybox:1.37
+          command: [httpd, -f, -p, "8080", -h, /www]
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 3
+          resources:
+            requests: {cpu: 5m, memory: 4Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: content, mountPath: /www, readOnly: true}
+      volumes:
+        - name: content
+          configMap: {name: policy-backend-content}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-backend
+  namespace: ckad-labs
+  labels: {lab: "4.3"}
+spec:
+  selector: {app: policy-backend}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: policy-frontend
+  namespace: ckad-labs
+  labels: {role: frontend, lab: "4.3"}
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: client
+      image: busybox:1.37
+      command: [sh, -c, 'sleep 3600']
+      resources:
+        requests: {cpu: 5m, memory: 4Mi}
+        limits: {cpu: 25m, memory: 16Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: policy-intruder
+  namespace: ckad-labs
+  labels: {role: intruder, lab: "4.3"}
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: client
+      image: busybox:1.37
+      command: [sh, -c, 'sleep 3600']
+      resources:
+        requests: {cpu: 5m, memory: 4Mi}
+        limits: {cpu: 25m, memory: 16Mi}

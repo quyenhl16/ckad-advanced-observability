@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: day4-backend
+  namespace: ckad-labs
+  labels: {lab: "4.1"}
+spec:
+  type: ClusterIP
+  # Intentional mismatch: the fix action changes this to day4-backend.
+  selector: {app: day4-backend-mismatch}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: day4-frontend
+  namespace: ckad-labs
+  labels: {lab: "4.1"}
+spec:
+  type: NodePort
+  selector: {app: day4-frontend}
+  ports:
+    - {name: http, port: 8080, targetPort: http}

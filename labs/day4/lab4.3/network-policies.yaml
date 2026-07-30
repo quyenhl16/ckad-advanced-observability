@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-ingress-from-frontend
+  namespace: ckad-labs
+  labels: {lab: "4.3"}
+spec:
+  podSelector:
+    matchLabels: {role: backend, lab: "4.3"}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {role: frontend, lab: "4.3"}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-deny-all-egress
+  namespace: ckad-labs
+  labels: {lab: "4.3"}
+spec:
+  podSelector:
+    matchLabels: {role: backend, lab: "4.3"}
+  policyTypes: [Egress]
+  egress: []

@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-backend
+  namespace: ckad-labs
+  labels: {app: ingress-backend, lab: "4.2"}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ingress-backend}
+  template:
+    metadata:
+      labels: {app: ingress-backend, tier: backend, lab: "4.2"}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532}
+      containers:
+        - name: backend
+          image: ckad/traffic-ingest:local
+          imagePullPolicy: IfNotPresent
+          env: [{name: HTTP_ADDR, value: ":8080"}]
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 3
+          resources:
+            requests: {cpu: 25m, memory: 24Mi}
+            limits: {cpu: 200m, memory: 96Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-backend
+  namespace: ckad-labs
+  labels: {lab: "4.2"}
+spec:
+  selector: {app: ingress-backend}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-frontend
+  namespace: ckad-labs
+  labels: {app: ingress-frontend, lab: "4.2"}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ingress-frontend}
+  template:
+    metadata:
+      labels: {app: ingress-frontend, tier: frontend, lab: "4.2"}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532}
+      containers:
+        - name: frontend
+          image: ckad/observability-frontend:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: HTTP_ADDR, value: ":8080"}
+            - {name: ANALYTICS_URL, value: "http://analytics-engine.advanced-observability.svc.cluster.local:8081"}
+            - {name: ALERT_MANAGER_URL, value: "http://alert-manager.advanced-observability.svc.cluster.local:8082"}
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 3
+          resources:
+            requests: {cpu: 25m, memory: 24Mi}
+            limits: {cpu: 150m, memory: 96Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-frontend
+  namespace: ckad-labs
+  labels: {lab: "4.2"}
+spec:
+  selector: {app: ingress-frontend}
+  ports: [{name: http, port: 8080, targetPort: http}]

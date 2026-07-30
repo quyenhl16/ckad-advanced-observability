@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: day4-frontend
+  namespace: ckad-labs
+  labels: {lab: "4.2"}
+spec:
+  ingressClassName: INGRESS_CLASS_PLACEHOLDER
+  rules:
+    - host: day4.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ingress-frontend
+                port: {number: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: day4-backend
+  namespace: ckad-labs
+  labels: {lab: "4.2"}
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: INGRESS_CLASS_PLACEHOLDER
+  rules:
+    - host: day4.local
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ingress-backend
+                port: {number: 8080}
