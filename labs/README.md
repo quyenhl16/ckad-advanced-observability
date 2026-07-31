@@ -9,11 +9,12 @@ workloads. Day 1 resources and the cloned Day 2 workloads run in the
 - `kubectl` is configured for the cluster.
 - The application is running in `advanced-observability`.
 - The application images are reachable by every Kubernetes node.
-- Metrics Server is required only for Lab 2.3 HPA metrics.
+- Metrics Server is required for Labs 2.3 and 5.2.
 - An NGINX Ingress controller is required only for Lab 4.2.
 - A CNI that enforces NetworkPolicy is required only for Lab 4.3.
 - A default dynamic StorageClass, or an explicit `STORAGE_CLASS`, is required
   only for Lab 4.4.
+- Helm 3 is required only for Lab 5.4.
 
 Every lab directory contains a reference manifest and a `run.sh` exam-speed
 script. Make all scripts executable on CentOS:
@@ -67,6 +68,22 @@ Run each complete Day 4 workflow with its default `run` action:
 ./labs/day4/lab4.2/run.sh
 ./labs/day4/lab4.3/run.sh
 ./labs/day4/lab4.4/run.sh
+```
+
+Day 5 covers application observability, troubleshooting, and Helm:
+
+- Lab 5.1: startup, HTTP liveness, and file-based readiness probes.
+- Lab 5.2: container logs, previous logs, Events, and resource metrics.
+- Lab 5.3: selector, image-name, and Service targetPort troubleshooting.
+- Lab 5.4: Helm value overrides, upgrades, release history, and rollback.
+
+Run each complete Day 5 workflow with its default `run` action:
+
+```bash
+./labs/day5/lab5.1/run.sh
+./labs/day5/lab5.2/run.sh
+./labs/day5/lab5.3/run.sh
+./labs/day5/lab5.4/run.sh
 ```
 
 Clean all namespaced lab resources when finished:

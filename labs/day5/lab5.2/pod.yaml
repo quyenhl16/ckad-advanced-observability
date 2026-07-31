@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cli-observer
+  namespace: ckad-labs
+  labels: {app: cli-observer, lab: "5.2"}
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Always
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: [sh, -c]
+      args:
+        - |
+          if [ ! -f /state/crashed-once ]; then
+            touch /state/crashed-once
+            echo "intentional crash for --previous" >&2
+            exit 42
+          fi
+          echo "app recovered after intentional crash"
+          while true; do
+            echo "app heartbeat $(date -Iseconds)"
+            sleep 10
+          done
+      resources:
+        requests: {cpu: 10m, memory: 8Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+      volumeMounts:
+        - {name: state, mountPath: /state}
+    - name: sidecar
+      image: busybox:1.37
+      command: [sh, -c]
+      args:
+        - |
+          while true; do
+            echo "sidecar heartbeat $(date -Iseconds)"
+            sleep 10
+          done
+      resources:
+        requests: {cpu: 5m, memory: 4Mi}
+        limits: {cpu: 25m, memory: 16Mi}
+  volumes:
+    - {name: state, emptyDir: {}}

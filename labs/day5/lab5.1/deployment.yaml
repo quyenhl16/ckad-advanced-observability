@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: self-healing-app
+  namespace: ckad-labs
+  labels: {app: self-healing-app, lab: "5.1"}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: self-healing-app}
+  template:
+    metadata:
+      labels: {app: self-healing-app, lab: "5.1"}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: [sh, -c]
+          args:
+            - |
+              sleep "$START_DELAY"
+              mkdir -p /www
+              printf 'healthy\n' > /www/health
+              touch /tmp/ready
+              exec httpd -f -p 8080 -h /www
+          env:
+            - {name: START_DELAY, value: "12"}
+          ports: [{name: http, containerPort: 8080}]
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 3
+            failureThreshold: 2
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'test -f /tmp/ready']
+            periodSeconds: 2
+            failureThreshold: 1
+          resources:
+            requests: {cpu: 5m, memory: 4Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: web-content, mountPath: /www}
+      volumes:
+        - {name: web-content, emptyDir: {}}

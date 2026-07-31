@@ -1,0 +1,6 @@
+apiVersion: v2
+name: observer-demo
+description: Minimal CKAD Helm upgrade and rollback lab
+type: application
+version: 0.1.0
+appVersion: "1.0"
