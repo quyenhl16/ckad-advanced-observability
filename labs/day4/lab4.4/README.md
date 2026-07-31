@@ -3,9 +3,11 @@
 Duration: approximately 45 minutes. CKAD domains: Services and Networking,
 Design and Build.
 
-Request a dynamically provisioned 1 Gi `ReadWriteOnce` volume, mount it at
-`/data`, write a known value, delete the Pod, recreate it with the same claim,
-and verify that the value remains.
+Request a dynamically provisioned 1 Gi `ReadWriteOnce` volume and mount it in a
+Pod whose main container uses the deployed `traffic-ingest` image. A small
+BusyBox storage helper writes a known value because the production image is
+distroless. Delete the Pod, recreate it with the same claim, and verify that
+the value remains.
 
 The script uses the cluster's default StorageClass:
 

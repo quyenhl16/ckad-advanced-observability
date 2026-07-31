@@ -1,8 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: nginxinc/nginx-unprivileged
-  tag: 1.27-alpine
+  ref: ckad/traffic-ingest:local
   pullPolicy: IfNotPresent
 
 message: release-v1

@@ -7,6 +7,8 @@ readonly NAMESPACE="ckad-labs"
 readonly DEPLOYMENT="triage-app"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 diagnose_selector() {
   local output
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
@@ -54,8 +56,12 @@ runtime_failure() {
 }
 
 fix() {
+  local image
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
-  kubectl apply -f "${LAB_DIR}/fixed.yaml"
+  image="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
+  sed "s|ckad/traffic-ingest:local|${image}|" \
+    "${LAB_DIR}/fixed.yaml" | kubectl apply -f -
   kubectl rollout status deployment/"$DEPLOYMENT" -n "$NAMESPACE" --timeout=120s
 }
 
@@ -65,7 +71,7 @@ endpoint_addresses() {
 }
 
 verify() {
-  local addresses attempt image target_port
+  local addresses attempt expected_image image target_port
   for attempt in $(seq 1 30); do
     addresses="$(endpoint_addresses)"
     [[ -n "$addresses" ]] && break
@@ -77,15 +83,17 @@ verify() {
   }
   image="$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" \
     -o jsonpath='{.spec.template.spec.containers[0].image}')"
+  expected_image="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
   target_port="$(kubectl get service triage-app -n "$NAMESPACE" \
     -o jsonpath='{.spec.ports[0].targetPort}')"
-  [[ "$image" == "busybox:1.37" ]]
+  [[ "$image" == "$expected_image" ]]
   [[ "$target_port" == "http" ]]
   kubectl delete pod lab5-3-probe -n "$NAMESPACE" \
     --ignore-not-found --wait=false >/dev/null
   kubectl run lab5-3-probe -n "$NAMESPACE" --rm --attach --restart=Never \
     --image=busybox:1.37 --command -- \
-    wget -qO- -T 5 http://triage-app:8080/
+    wget -qO- -T 5 http://triage-app:8080/health/ready
   printf 'Verified selector, image, targetPort, and Service endpoints.\n'
 }
 

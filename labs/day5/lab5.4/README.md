@@ -4,9 +4,10 @@ Duration: approximately 45 minutes. CKAD domain: Application Deployment
 (20%).
 
 Install the bundled Helm chart with value overrides, upgrade the release, and
-roll back to the preceding revision. A ConfigMap supplies the served message,
-and a checksum annotation triggers a Deployment rollout when that value
-changes.
+roll back to the preceding revision. The chart deploys the real
+`traffic-ingest` image discovered from the production workload. A ConfigMap
+supplies a release marker through an environment variable, and a checksum
+annotation triggers a Deployment rollout when that value changes.
 
 Run the complete workflow:
 
@@ -29,10 +30,12 @@ Equivalent direct commands:
 ```bash
 helm upgrade --install day5-observer labs/day5/lab5.4/chart/observer-demo \
   -n ckad-labs --create-namespace \
-  --set replicaCount=1 --set-string message=release-v1
+  --set replicaCount=1 --set-string message=release-v1 \
+  --set-string image.ref=REGISTRY/traffic-ingest:TAG
 helm upgrade day5-observer labs/day5/lab5.4/chart/observer-demo \
   -n ckad-labs --reuse-values \
-  --set replicaCount=2 --set-string message=release-v2
+  --set replicaCount=2 --set-string message=release-v2 \
+  --set-string image.ref=REGISTRY/traffic-ingest:TAG
 helm history day5-observer -n ckad-labs
 helm rollback day5-observer 1 -n ckad-labs
 ```

@@ -7,8 +7,26 @@ metadata:
 spec:
   automountServiceAccountToken: false
   restartPolicy: Always
+  securityContext: {fsGroup: 65532}
   containers:
     - name: app
+      image: ckad/traffic-ingest:local
+      imagePullPolicy: IfNotPresent
+      env: [{name: HTTP_ADDR, value: ":8080"}]
+      ports: [{name: http, containerPort: 8080}]
+      readinessProbe:
+        httpGet: {path: /health/ready, port: http}
+        periodSeconds: 3
+      resources:
+        requests: {cpu: 25m, memory: 24Mi}
+        limits: {cpu: 200m, memory: 96Mi}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [ALL]}
+    - name: log-helper
       image: busybox:1.37
       command: [sh, -c]
       args:
@@ -18,27 +36,21 @@ spec:
             echo "intentional crash for --previous" >&2
             exit 42
           fi
-          echo "app recovered after intentional crash"
+          echo "log helper recovered after intentional crash"
           while true; do
-            echo "app heartbeat $(date -Iseconds)"
-            sleep 10
-          done
-      resources:
-        requests: {cpu: 10m, memory: 8Mi}
-        limits: {cpu: 50m, memory: 32Mi}
-      volumeMounts:
-        - {name: state, mountPath: /state}
-    - name: sidecar
-      image: busybox:1.37
-      command: [sh, -c]
-      args:
-        - |
-          while true; do
-            echo "sidecar heartbeat $(date -Iseconds)"
+            wget -qO- http://127.0.0.1:8080/health/ready >/dev/null || true
+            echo "log helper heartbeat $(date -Iseconds)"
             sleep 10
           done
       resources:
         requests: {cpu: 5m, memory: 4Mi}
         limits: {cpu: 25m, memory: 16Mi}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      volumeMounts:
+        - {name: state, mountPath: /state}
   volumes:
     - {name: state, emptyDir: {}}

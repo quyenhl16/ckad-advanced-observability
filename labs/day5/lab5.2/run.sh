@@ -7,14 +7,19 @@ readonly NAMESPACE="ckad-labs"
 readonly POD="cli-observer"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 deploy() {
-  local restart_count ready attempt
+  local image restart_count ready attempt
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
   kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
-  kubectl apply -f "${LAB_DIR}/pod.yaml"
+  image="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
+  sed "s|ckad/traffic-ingest:local|${image}|" \
+    "${LAB_DIR}/pod.yaml" | kubectl apply -f -
   for attempt in $(seq 1 60); do
     restart_count="$(kubectl get pod "$POD" -n "$NAMESPACE" \
-      -o jsonpath='{.status.containerStatuses[?(@.name=="app")].restartCount}' 2>/dev/null || true)"
+      -o jsonpath='{.status.containerStatuses[?(@.name=="log-helper")].restartCount}' 2>/dev/null || true)"
     ready="$(kubectl get pod "$POD" -n "$NAMESPACE" \
       -o jsonpath='{.status.containerStatuses[?(@.name=="app")].ready}' 2>/dev/null || true)"
     if [[ "${restart_count:-0}" -ge 1 && "$ready" == "true" ]]; then
@@ -28,16 +33,16 @@ deploy() {
 }
 
 logs() {
-  local current previous sidecar
-  current="$(kubectl logs "$POD" -n "$NAMESPACE" -c app)"
-  previous="$(kubectl logs "$POD" -n "$NAMESPACE" -c app --previous)"
-  sidecar="$(kubectl logs "$POD" -n "$NAMESPACE" -c sidecar --tail=5)"
-  grep -q 'app recovered' <<<"$current"
+  local app current previous
+  app="$(kubectl logs "$POD" -n "$NAMESPACE" -c app --tail=20)"
+  current="$(kubectl logs "$POD" -n "$NAMESPACE" -c log-helper)"
+  previous="$(kubectl logs "$POD" -n "$NAMESPACE" -c log-helper --previous)"
+  grep -q 'HTTP server started' <<<"$app"
+  grep -q 'log helper recovered' <<<"$current"
   grep -q 'intentional crash' <<<"$previous"
-  grep -q 'sidecar heartbeat' <<<"$sidecar"
-  printf '%s\n' '--- app (current) ---' "$current"
-  printf '%s\n' '--- app (previous) ---' "$previous"
-  printf '%s\n' '--- sidecar ---' "$sidecar"
+  printf '%s\n' '--- traffic-ingest app ---' "$app"
+  printf '%s\n' '--- log-helper (current) ---' "$current"
+  printf '%s\n' '--- log-helper (previous) ---' "$previous"
 }
 
 events() {

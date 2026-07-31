@@ -8,6 +8,8 @@ readonly POD="pvc-client"
 readonly DATA_VALUE="ckad-day4-persistent-data"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 default_storage_class() {
   kubectl get storageclass \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' \
@@ -30,21 +32,29 @@ apply_pvc() {
   printf 'Using dynamic StorageClass: %s\n' "$storage_class"
 }
 
+apply_pod() {
+  local image
+  image="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
+  sed "s|ckad/traffic-ingest:local|${image}|" \
+    "${LAB_DIR}/pod.yaml" | kubectl apply -f -
+}
+
 deploy() {
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
   apply_pvc
   kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
-  kubectl apply -f "${LAB_DIR}/pod.yaml"
+  apply_pod
   kubectl wait --for=condition=Ready pod/"$POD" -n "$NAMESPACE" --timeout=180s
   [[ "$(kubectl get pvc day4-data -n "$NAMESPACE" -o jsonpath='{.status.phase}')" == "Bound" ]]
-  kubectl exec "$POD" -n "$NAMESPACE" -- \
+  kubectl exec "$POD" -n "$NAMESPACE" -c storage-probe -- \
     sh -c 'printf "%s\n" "$1" > /data/day4.txt && sync' sh "$DATA_VALUE"
   printf 'Wrote persistent value through the first Pod.\n'
 }
 
 recreate() {
   kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
-  kubectl apply -f "${LAB_DIR}/pod.yaml"
+  apply_pod
   kubectl wait --for=condition=Ready pod/"$POD" -n "$NAMESPACE" --timeout=180s
   printf 'Recreated Pod with the original claim.\n'
 }
@@ -52,7 +62,7 @@ recreate() {
 verify() {
   local actual
   [[ "$(kubectl get pvc day4-data -n "$NAMESPACE" -o jsonpath='{.status.phase}')" == "Bound" ]]
-  actual="$(kubectl exec "$POD" -n "$NAMESPACE" -- cat /data/day4.txt)"
+  actual="$(kubectl exec "$POD" -n "$NAMESPACE" -c storage-probe -- cat /data/day4.txt)"
   [[ "$actual" == "$DATA_VALUE" ]] || {
     printf 'Expected %s, found %s.\n' "$DATA_VALUE" "$actual" >&2
     return 1

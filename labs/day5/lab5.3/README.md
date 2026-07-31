@@ -12,6 +12,10 @@ Troubleshoot three faults in sequence:
 3. The Service uses `targetPort: web`, while the container port is named
    `http`, so it cannot route traffic correctly.
 
+The fixed Deployment uses the real `traffic-ingest` image discovered from the
+running production workload. BusyBox remains only as a short-lived Service
+probe.
+
 Run the complete triage and repair:
 
 ```bash

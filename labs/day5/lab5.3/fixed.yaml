@@ -15,15 +15,22 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: app
-          image: busybox:1.37
-          command: [sh, -c, 'mkdir -p /www && echo triage-fixed > /www/index.html && exec httpd -f -p 8080 -h /www']
+          image: ckad/traffic-ingest:local
+          imagePullPolicy: IfNotPresent
+          env: [{name: HTTP_ADDR, value: ":8080"}]
           ports: [{name: http, containerPort: 8080}]
           readinessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: /health/ready, port: http}
             periodSeconds: 2
           resources:
-            requests: {cpu: 5m, memory: 4Mi}
-            limits: {cpu: 50m, memory: 32Mi}
+            requests: {cpu: 25m, memory: 24Mi}
+            limits: {cpu: 200m, memory: 96Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
 ---
 apiVersion: v1
 kind: Service

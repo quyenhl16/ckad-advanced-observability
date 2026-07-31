@@ -19,30 +19,30 @@ spec:
     spec:
       automountServiceAccountToken: false
       containers:
-        - name: web
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        - name: app
+          image: {{ .Values.image.ref | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - {name: HTTP_ADDR, value: ":8080"}
+            - name: LAB_RELEASE_MESSAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "observer-demo.fullname" . }}
+                  key: index.html
           ports:
             - {name: http, containerPort: 8080}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
           readinessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: /health/ready, port: http}
             periodSeconds: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
-          volumeMounts:
-            - name: content
-              mountPath: /usr/share/nginx/html/index.html
-              subPath: index.html
-              readOnly: true
-            - {name: nginx-tmp, mountPath: /tmp}
-            - {name: nginx-cache, mountPath: /var/cache/nginx}
-      volumes:
-        - name: content
-          configMap:
-            name: {{ include "observer-demo.fullname" . }}
-        - {name: nginx-tmp, emptyDir: {}}
-        - {name: nginx-cache, emptyDir: {}}

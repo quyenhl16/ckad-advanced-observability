@@ -6,16 +6,28 @@ readonly ROOT_DIR="$(cd -- "${LAB_DIR}/../../.." && pwd)"
 readonly NAMESPACE="ckad-labs"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 reach_backend() {
   local pod="$1"
-  kubectl exec "$pod" -n "$NAMESPACE" -- \
-    wget -qO- -T 3 http://policy-backend:8080/
+  kubectl exec "$pod" -n "$NAMESPACE" -c network-probe -- \
+    wget -qO- -T 3 http://policy-backend:8080/health/ready
 }
 
 deploy() {
+  local backend_image frontend_image
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
   kubectl delete -f "${LAB_DIR}/network-policies.yaml" --ignore-not-found
-  kubectl apply -f "${LAB_DIR}/workloads.yaml"
+  backend_image="$(resolve_workload_image "${BACKEND_IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
+  frontend_image="$(resolve_workload_image "${FRONTEND_IMAGE:-}" \
+    advanced-observability observability-frontend 'app=observability-frontend')"
+  kubectl delete pod policy-frontend policy-intruder -n "$NAMESPACE" \
+    --ignore-not-found
+  sed \
+    -e "s|ckad/traffic-ingest:local|${backend_image}|" \
+    -e "s|ckad/observability-frontend:local|${frontend_image}|" \
+    "${LAB_DIR}/workloads.yaml" | kubectl apply -f -
   kubectl rollout status deployment/policy-backend -n "$NAMESPACE" --timeout=120s
   kubectl wait --for=condition=Ready pod/policy-frontend pod/policy-intruder \
     -n "$NAMESPACE" --timeout=120s
@@ -45,7 +57,7 @@ verify() {
     printf 'Intruder unexpectedly reached the isolated backend. Check CNI NetworkPolicy support.\n' >&2
     return 1
   fi
-  if kubectl exec deployment/policy-backend -n "$NAMESPACE" -- \
+  if kubectl exec deployment/policy-backend -n "$NAMESPACE" -c network-probe -- \
     wget -qO- -T 3 http://1.1.1.1/ >/dev/null 2>&1; then
     printf 'Backend unexpectedly reached 1.1.1.1; egress is not isolated.\n' >&2
     return 1

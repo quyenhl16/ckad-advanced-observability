@@ -3,7 +3,11 @@
 Duration: approximately 45 minutes. CKAD domain: Services and Networking
 (20%).
 
-Start with an unrestricted frontend client, intruder client, and HTTP backend.
+Start with real `observability-frontend` and `traffic-ingest` application
+containers, plus small BusyBox diagnostic containers that share each Pod's
+network namespace. The diagnostic containers are used only because the
+production images are distroless and do not contain `wget`.
+
 Then apply policies that:
 
 - Allow backend ingress only from Pods labeled `role: frontend` on TCP 8080.
@@ -30,8 +34,9 @@ An Egress policy with `egress: []` denies all backend egress. The verification
 expects the frontend request to succeed, the intruder request to time out, and
 an HTTP request from the backend to `1.1.1.1` to fail.
 
-The cluster CNI must enforce NetworkPolicy. A non-enforcing CNI causes the
-negative tests to fail intentionally.
+The policy selects the complete backend Pod, including the real application
+container. The cluster CNI must enforce NetworkPolicy. A non-enforcing CNI
+causes the negative tests to fail intentionally.
 
 Cleanup:
 

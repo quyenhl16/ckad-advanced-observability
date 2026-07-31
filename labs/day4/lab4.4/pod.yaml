@@ -7,19 +7,39 @@ metadata:
 spec:
   automountServiceAccountToken: false
   securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-    runAsGroup: 1000
     fsGroup: 1000
     fsGroupChangePolicy: OnRootMismatch
   containers:
-    - name: writer
+    - name: app
+      image: ckad/traffic-ingest:local
+      imagePullPolicy: IfNotPresent
+      env: [{name: HTTP_ADDR, value: ":8080"}]
+      ports: [{name: http, containerPort: 8080}]
+      readinessProbe:
+        httpGet: {path: /health/ready, port: http}
+        periodSeconds: 3
+      resources:
+        requests: {cpu: 25m, memory: 24Mi}
+        limits: {cpu: 200m, memory: 96Mi}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [ALL]}
+      volumeMounts:
+        - {name: data, mountPath: /data, readOnly: true}
+    - name: storage-probe
       image: busybox:1.37
       command: [sh, -c, 'sleep 3600']
       resources:
         requests: {cpu: 5m, memory: 4Mi}
         limits: {cpu: 25m, memory: 16Mi}
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
         allowPrivilegeEscalation: false
         capabilities: {drop: [ALL]}
       volumeMounts:

@@ -13,26 +13,48 @@ spec:
       labels: {app: self-healing-app, lab: "5.1"}
     spec:
       automountServiceAccountToken: false
+      securityContext: {fsGroup: 65532}
       containers:
         - name: app
+          image: ckad/traffic-ingest:local
+          imagePullPolicy: IfNotPresent
+          env: [{name: HTTP_ADDR, value: ":8080"}]
+          ports: [{name: app-http, containerPort: 8080}]
+          startupProbe:
+            httpGet: {path: /health/live, port: app-http}
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: {path: /health/live, port: app-http}
+            periodSeconds: 3
+            failureThreshold: 2
+          readinessProbe:
+            httpGet: {path: /health/ready, port: app-http}
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 25m, memory: 24Mi}
+            limits: {cpu: 200m, memory: 96Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+        - name: readiness-helper
           image: busybox:1.37
           command: [sh, -c]
           args:
             - |
               sleep "$START_DELAY"
-              mkdir -p /www
               printf 'healthy\n' > /www/health
               touch /tmp/ready
-              exec httpd -f -p 8080 -h /www
+              exec httpd -f -p 8081 -h /www
           env:
             - {name: START_DELAY, value: "12"}
-          ports: [{name: http, containerPort: 8080}]
-          startupProbe:
-            httpGet: {path: /health, port: http}
-            periodSeconds: 2
-            failureThreshold: 30
+          ports: [{name: helper-http, containerPort: 8081}]
           livenessProbe:
-            httpGet: {path: /health, port: http}
+            httpGet: {path: /health, port: helper-http}
+            initialDelaySeconds: 15
             periodSeconds: 3
             failureThreshold: 2
           readinessProbe:
@@ -42,11 +64,13 @@ spec:
             failureThreshold: 1
           resources:
             requests: {cpu: 5m, memory: 4Mi}
-            limits: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 25m, memory: 16Mi}
           securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: web-content, mountPath: /www}
+            - {name: helper-content, mountPath: /www}
       volumes:
-        - {name: web-content, emptyDir: {}}
+        - {name: helper-content, emptyDir: {}}

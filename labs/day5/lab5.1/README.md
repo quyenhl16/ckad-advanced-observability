@@ -3,11 +3,12 @@
 Duration: approximately 45 minutes. CKAD domain: Application Observability
 and Maintenance (15%).
 
-Deploy a slow-starting HTTP container with:
+Deploy the real `traffic-ingest` image as the main application container with:
 
-- A startup probe that gives the process up to 60 seconds to start.
-- An HTTP liveness probe on `/health`.
-- A file-based exec readiness probe on `/tmp/ready`.
+- A startup probe that gives the application up to 60 seconds to start.
+- HTTP liveness and readiness probes on its real health endpoints.
+- A small BusyBox readiness helper with a file-based exec probe on
+  `/tmp/ready`.
 
 Run the complete workflow:
 
@@ -15,10 +16,11 @@ Run the complete workflow:
 ./labs/day5/lab5.1/run.sh run
 ```
 
-The `break` action deletes the HTTP health file. After two failed liveness
-checks, kubelet restarts the container. The startup command recreates both
-health files, and the script waits until `restartCount` increases and the
-container becomes Ready again.
+The production image is distroless, so it has no shell or `test` binary for a
+file probe. The helper supplies only that capability. The `break` action
+deletes the helper's HTTP health file; kubelet restarts it while the real
+application remains running, then the script waits until the helper becomes
+Ready again.
 
 ```bash
 ./labs/day5/lab5.1/run.sh deploy

@@ -7,14 +7,20 @@ readonly NAMESPACE="ckad-labs"
 readonly DEPLOYMENT="self-healing-app"
 ACTION="${1:-run}"
 
+source "${ROOT_DIR}/labs/common/images.sh"
+
 pod_name() {
   kubectl get pod -n "$NAMESPACE" -l app=self-healing-app \
     -o jsonpath='{.items[0].metadata.name}'
 }
 
 deploy() {
+  local image
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
-  kubectl apply -f "${LAB_DIR}/deployment.yaml"
+  image="$(resolve_workload_image "${IMAGE:-}" \
+    advanced-observability traffic-ingest 'app=traffic-ingest')"
+  sed "s|ckad/traffic-ingest:local|${image}|" \
+    "${LAB_DIR}/deployment.yaml" | kubectl apply -f -
   kubectl rollout status deployment/"$DEPLOYMENT" -n "$NAMESPACE" --timeout=120s
 }
 
@@ -22,24 +28,28 @@ verify() {
   local pod
   pod="$(pod_name)"
   [[ -n "$pod" ]]
-  [[ "$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.spec.containers[0].startupProbe.httpGet.path}')" == "/health" ]]
-  [[ "$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.spec.containers[0].livenessProbe.httpGet.path}')" == "/health" ]]
-  [[ "$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.spec.containers[0].readinessProbe.exec.command[2]}')" == "test -f /tmp/ready" ]]
-  kubectl exec "$pod" -n "$NAMESPACE" -- test -f /tmp/ready
-  kubectl exec "$pod" -n "$NAMESPACE" -- wget -qO- http://127.0.0.1:8080/health
-  printf 'Startup, HTTP liveness, and file readiness probes verified.\n'
+  [[ "$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.spec.containers[0].startupProbe.httpGet.path}')" == "/health/live" ]]
+  [[ "$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.spec.containers[0].livenessProbe.httpGet.path}')" == "/health/live" ]]
+  [[ "$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.spec.containers[1].readinessProbe.exec.command[2]}')" == "test -f /tmp/ready" ]]
+  kubectl exec "$pod" -n "$NAMESPACE" -c readiness-helper -- test -f /tmp/ready
+  kubectl exec "$pod" -n "$NAMESPACE" -c readiness-helper -- \
+    wget -qO- http://127.0.0.1:8080/health/ready
+  printf 'Real application startup/liveness and file readiness gate verified.\n'
 }
 
 break_and_recover() {
   local pod before after ready attempt
   pod="$(pod_name)"
-  before="$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[0].restartCount}')"
-  kubectl exec "$pod" -n "$NAMESPACE" -- rm -f /www/health
+  before="$(kubectl get pod "$pod" -n "$NAMESPACE" \
+    -o jsonpath='{.status.containerStatuses[?(@.name=="readiness-helper")].restartCount}')"
+  kubectl exec "$pod" -n "$NAMESPACE" -c readiness-helper -- rm -f /www/health
   for attempt in $(seq 1 60); do
-    after="$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[0].restartCount}')"
-    ready="$(kubectl get pod "$pod" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[0].ready}')"
+    after="$(kubectl get pod "$pod" -n "$NAMESPACE" \
+      -o jsonpath='{.status.containerStatuses[?(@.name=="readiness-helper")].restartCount}')"
+    ready="$(kubectl get pod "$pod" -n "$NAMESPACE" \
+      -o jsonpath='{.status.containerStatuses[?(@.name=="readiness-helper")].ready}')"
     if (( after > before )) && [[ "$ready" == "true" ]]; then
-      printf 'Liveness recovery verified: restartCount %s -> %s.\n' "$before" "$after"
+      printf 'Helper liveness recovery verified: restartCount %s -> %s.\n' "$before" "$after"
       return 0
     fi
     sleep 2
