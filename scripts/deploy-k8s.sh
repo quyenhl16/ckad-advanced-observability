@@ -14,6 +14,8 @@ CLUSTER_TYPE="auto"
 CLUSTER_NAME=""
 REGISTRY=""
 IMAGE_TAG=""
+CANARY_TAG=""
+OVERLAY="dev"
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-}"
 ROLLOUT_TIMEOUT="${ROLLOUT_TIMEOUT:-300s}"
 SKIP_BUILD=false
@@ -29,12 +31,14 @@ Options:
   --registry HOST/PATH Registry prefix for a generic cluster, for example
                        registry.example.com/team (required for generic)
   --tag TAG            Image tag (default: Git commit plus UTC timestamp)
+  --canary-tag TAG     Canary image tag (default: TAG-canary)
+  --overlay NAME       Committed Kustomize overlay: dev or prod (default: dev)
   --engine ENGINE      docker or podman (default: auto-detect)
   --timeout DURATION   kubectl rollout timeout (default: 300s)
   --skip-build         Reuse images already present in the container engine
   -h, --help           Show this help
 
-Secrets are read from environment variables. For a shared cluster, set at least:
+Secrets are read from environment variables. For every cluster, set:
   POSTGRES_PASSWORD and ALERT_API_KEY
 
 Examples:
@@ -85,6 +89,16 @@ while (($# > 0)); do
       IMAGE_TAG="$2"
       shift 2
       ;;
+    --canary-tag)
+      (($# >= 2)) || die "--canary-tag requires a value"
+      CANARY_TAG="$2"
+      shift 2
+      ;;
+    --overlay)
+      (($# >= 2)) || die "--overlay requires a value"
+      OVERLAY="$2"
+      shift 2
+      ;;
     --engine)
       (($# >= 2)) || die "--engine requires a value"
       CONTAINER_ENGINE="$2"
@@ -112,6 +126,11 @@ done
 case "$CLUSTER_TYPE" in
   auto|kind|minikube|generic) ;;
   *) die "Unsupported cluster type: ${CLUSTER_TYPE}" ;;
+esac
+
+case "$OVERLAY" in
+  dev|prod) ;;
+  *) die "Unsupported overlay: ${OVERLAY}; expected dev or prod" ;;
 esac
 
 case "$CONTAINER_ENGINE" in
@@ -166,20 +185,19 @@ fi
 [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || \
   die "Invalid container image tag: ${IMAGE_TAG}"
 
-if [[ "$CLUSTER_TYPE" == "generic" ]]; then
-  [[ -n "${POSTGRES_PASSWORD:-}" ]] || die "POSTGRES_PASSWORD is required for a generic cluster"
-  [[ -n "${ALERT_API_KEY:-}" ]] || die "ALERT_API_KEY is required for a generic cluster"
-else
-  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-local-observability-password}"
-  ALERT_API_KEY="${ALERT_API_KEY:-local-observability-api-key}"
-fi
+[[ -n "$CANARY_TAG" ]] || CANARY_TAG="${IMAGE_TAG}-canary"
+[[ "$CANARY_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || \
+  die "Invalid canary image tag: ${CANARY_TAG}"
+
+[[ -n "${POSTGRES_PASSWORD:-}" ]] || die "POSTGRES_PASSWORD is required"
+[[ -n "${ALERT_API_KEY:-}" ]] || die "ALERT_API_KEY is required"
 
 POSTGRES_USER="${POSTGRES_USER:-observability}"
 POSTGRES_DB="${POSTGRES_DB:-observability}"
 SMTP_ADDRESS="${SMTP_ADDRESS:-smtp.example.com:587}"
 SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
-SMTP_USERNAME="${SMTP_USERNAME:-change-me}"
-SMTP_PASSWORD="${SMTP_PASSWORD:-change-me}"
+SMTP_USERNAME="${SMTP_USERNAME:-unused}"
+SMTP_PASSWORD="${SMTP_PASSWORD:-unused}"
 SMTP_FROM="${SMTP_FROM:-alerts@example.com}"
 
 for secret_name in \
@@ -203,6 +221,11 @@ for service in "${SERVICES[@]}"; do
     IMAGE_NAMES["$service"]="ckad/${service}"
   fi
 done
+if [[ "$CLUSTER_TYPE" == "generic" ]]; then
+  IMAGE_NAMES[traffic-ingest-canary]="${REGISTRY}/traffic-ingest-canary"
+else
+  IMAGE_NAMES[traffic-ingest-canary]="ckad/traffic-ingest-canary"
+fi
 
 if [[ "$SKIP_BUILD" == false ]]; then
   log "Step 2/7: Build application images from source with ${CONTAINER_ENGINE}"
@@ -210,17 +233,24 @@ if [[ "$SKIP_BUILD" == false ]]; then
     image="${IMAGE_NAMES[$service]}:${IMAGE_TAG}"
     printf 'Building %s\n' "$image"
     "$CONTAINER_ENGINE" build \
-      --build-arg "SERVICE=${service}" \
+      --file "${ROOT_DIR}/services/${service}/Dockerfile" \
       --tag "$image" \
       "$ROOT_DIR"
   done
+  "$CONTAINER_ENGINE" tag \
+    "${IMAGE_NAMES[traffic-ingest]}:${IMAGE_TAG}" \
+    "${IMAGE_NAMES[traffic-ingest-canary]}:${CANARY_TAG}"
 else
   log "Step 2/7: Skip image build"
 fi
 
 log "Step 3/7: Make application images available to cluster nodes"
-for service in "${SERVICES[@]}"; do
-  image="${IMAGE_NAMES[$service]}:${IMAGE_TAG}"
+for service in "${SERVICES[@]}" traffic-ingest-canary; do
+  if [[ "$service" == "traffic-ingest-canary" ]]; then
+    image="${IMAGE_NAMES[$service]}:${CANARY_TAG}"
+  else
+    image="${IMAGE_NAMES[$service]}:${IMAGE_TAG}"
+  fi
   case "$CLUSTER_TYPE" in
     kind)
       kind load docker-image "$image" --name "$CLUSTER_NAME"
@@ -258,11 +288,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
-  - ../base
+  - ../overlays/${OVERLAY}
 images:
   - name: ckad/traffic-ingest
     newName: ${IMAGE_NAMES[traffic-ingest]}
     newTag: ${IMAGE_TAG}
+  - name: ckad/traffic-ingest-canary
+    newName: ${IMAGE_NAMES[traffic-ingest-canary]}
+    newTag: ${CANARY_TAG}
   - name: ckad/analytics-engine
     newName: ${IMAGE_NAMES[analytics-engine]}
     newTag: ${IMAGE_TAG}
@@ -275,7 +308,6 @@ images:
 secretGenerator:
   - name: observability-secrets
     namespace: ${NAMESPACE}
-    behavior: replace
     envs:
       - secrets.env
 generatorOptions:
@@ -304,8 +336,15 @@ for deployment in alert-manager analytics-engine traffic-ingest observability-fr
   fi
 done
 
+if ! kubectl rollout status deployment/traffic-ingest-canary \
+  --namespace "$NAMESPACE" --timeout "$ROLLOUT_TIMEOUT"; then
+  kubectl describe deployment/traffic-ingest-canary --namespace "$NAMESPACE"
+  die "Rollout failed: traffic-ingest-canary"
+fi
+
 log "Step 7/7: Show deployed resources"
-kubectl get pods,services,persistentvolumeclaims --namespace "$NAMESPACE" -o wide
+kubectl get pods,services,persistentvolumeclaims,hpa,ingress,cronjobs \
+  --namespace "$NAMESPACE" -o wide
 
 cat <<EOF
 

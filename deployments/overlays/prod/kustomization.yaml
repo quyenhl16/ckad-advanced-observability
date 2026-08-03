@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: advanced-observability
+resources:
+  - ../../base
+images:
+  - name: ckad/traffic-ingest
+    newTag: "1.0.0"
+  - name: ckad/traffic-ingest-canary
+    newTag: "1.1.0"
+  - name: ckad/analytics-engine
+    newTag: "1.0.0"
+  - name: ckad/alert-manager
+    newTag: "1.0.0"
+  - name: ckad/observability-frontend
+    newTag: "1.0.0"
+replicas:
+  - name: traffic-ingest
+    count: 3
+  - name: traffic-ingest-canary
+    count: 1
+  - name: analytics-engine
+    count: 1
+  - name: alert-manager
+    count: 2
+  - name: observability-frontend
+    count: 2

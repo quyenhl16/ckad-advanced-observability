@@ -3,11 +3,16 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - config.yaml
-  - postgres-pv.yaml
   - database.yaml
   - traffic-ingest.yaml
+  - traffic-ingest-canary.yaml
   - analytics-engine.yaml
   - alert-manager.yaml
   - observability-frontend.yaml
+  - health-audit-cronjob.yaml
+  - hpa.yaml
+  - rbac.yaml
+  - quota.yaml
+  - ingress.yaml
   - network-policies.yaml
   - pod-disruption-budget.yaml

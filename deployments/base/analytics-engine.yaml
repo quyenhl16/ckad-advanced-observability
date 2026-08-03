@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: analytics-engine
     app.kubernetes.io/component: analytics
     app.kubernetes.io/part-of: advanced-observability
+    app.kubernetes.io/version: "1.0.0"
 spec:
   selector: {app: analytics-engine}
   ports:
@@ -23,6 +24,7 @@ metadata:
     app.kubernetes.io/name: analytics-engine
     app.kubernetes.io/component: analytics
     app.kubernetes.io/part-of: advanced-observability
+    app.kubernetes.io/version: "1.0.0"
 spec:
   replicas: 1
   revisionHistoryLimit: 3
@@ -35,6 +37,7 @@ spec:
         app.kubernetes.io/name: analytics-engine
         app.kubernetes.io/component: analytics
         app.kubernetes.io/part-of: advanced-observability
+        app.kubernetes.io/version: "1.0.0"
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20
@@ -63,7 +66,7 @@ spec:
             - {name: analytics-logs, mountPath: /events}
       containers:
         - name: app
-          image: ckad/analytics-engine:local
+          image: ckad/analytics-engine:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: app-http

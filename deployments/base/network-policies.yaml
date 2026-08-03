@@ -132,3 +132,18 @@ spec:
             matchLabels: {app: alert-manager}
       ports:
         - {protocol: TCP, port: 8082}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: health-audit
+  namespace: advanced-observability
+spec:
+  podSelector:
+    matchLabels:
+      app: observability-health-audit
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 6443}

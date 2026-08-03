@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: advanced-observability
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: observability.local
+      http:
+        paths:
+          - path: /api/v1/metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: traffic-ingest
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: observability-frontend
+                port:
+                  number: 8083

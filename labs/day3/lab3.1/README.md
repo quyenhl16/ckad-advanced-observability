@@ -3,13 +3,14 @@
 Duration: approximately 45 minutes. CKAD domain: Application Environment,
 Configuration & Security (25%).
 
-Define a Secret and a ConfigMap as declarative manifests, then inject both into
-an application Pod. The Secret becomes `API_KEY`; the ConfigMap becomes
+Create a Secret from a runtime environment value and apply a declarative
+ConfigMap, then inject both into an application Pod. No Secret value is stored
+in Git. The Secret becomes `API_KEY`; the ConfigMap becomes
 `APP_MODE` and is also mounted at `/config`. The `app` container uses the
 deployed `traffic-ingest` service image.
 
 ```bash
-./labs/day3/lab3.1/run.sh run
+LAB_API_KEY='use-a-temporary-lab-value' ./labs/day3/lab3.1/run.sh run
 ```
 
 Inspect each injection mechanism without printing the secret value:

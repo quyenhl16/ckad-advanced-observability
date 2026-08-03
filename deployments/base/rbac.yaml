@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: observability-reader
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: health-audit
+    app.kubernetes.io/part-of: advanced-observability
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: observability-pod-reader
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: health-audit
+    app.kubernetes.io/part-of: advanced-observability
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: observability-pod-reader
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: health-audit
+    app.kubernetes.io/part-of: advanced-observability
+subjects:
+  - kind: ServiceAccount
+    name: observability-reader
+    namespace: advanced-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: observability-pod-reader

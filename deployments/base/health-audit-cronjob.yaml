@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: observability-health-audit
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: health-audit
+    app.kubernetes.io/component: maintenance
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          labels:
+            app: observability-health-audit
+            app.kubernetes.io/name: health-audit
+            app.kubernetes.io/component: maintenance
+            app.kubernetes.io/part-of: advanced-observability
+        spec:
+          serviceAccountName: observability-reader
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 100
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: audit
+              image: curlimages/curl:8.10.1
+              command: [sh, -c]
+              args:
+                - |
+                  set -eu
+                  service_account=/var/run/secrets/kubernetes.io/serviceaccount
+                  token="$(cat "${service_account}/token")"
+                  api="https://kubernetes.default.svc/api/v1/namespaces/${POD_NAMESPACE}/pods"
+                  printf '{"level":"info","component":"health-audit","namespace":"%s","event":"audit_started"}\n' "${POD_NAMESPACE}"
+                  curl --fail --silent --show-error \
+                    --cacert "${service_account}/ca.crt" \
+                    --header "Authorization: Bearer ${token}" \
+                    "${api}?limit=100" >/tmp/pods.json
+                  pod_count="$(grep -o '"kind":"Pod"' /tmp/pods.json | wc -l | tr -d ' ')"
+                  printf '{"level":"info","component":"health-audit","namespace":"%s","pods_seen":%s,"event":"audit_completed"}\n' "${POD_NAMESPACE}" "${pod_count}"
+              env:
+                - name: POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 16Mi

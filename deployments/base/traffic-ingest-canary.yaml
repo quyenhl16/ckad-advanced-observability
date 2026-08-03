@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-ingest-canary
+  namespace: advanced-observability
+  labels:
+    app.kubernetes.io/name: traffic-ingest
+    app.kubernetes.io/component: ingestion
+    app.kubernetes.io/part-of: advanced-observability
+    app.kubernetes.io/version: "1.1.0"
+    deployment-track: canary
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: traffic-ingest
+      deployment-track: canary
+  template:
+    metadata:
+      labels:
+        app: traffic-ingest
+        app.kubernetes.io/name: traffic-ingest
+        app.kubernetes.io/component: ingestion
+        app.kubernetes.io/part-of: advanced-observability
+        app.kubernetes.io/version: "1.1.0"
+        deployment-track: canary
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: ckad/traffic-ingest-canary:1.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: observability-config
+          env:
+            - name: HTTP_ADDR
+              value: :8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 2
+            failureThreshold: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3

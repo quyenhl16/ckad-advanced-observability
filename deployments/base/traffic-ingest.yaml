@@ -25,6 +25,8 @@ metadata:
     app.kubernetes.io/name: traffic-ingest
     app.kubernetes.io/component: ingestion
     app.kubernetes.io/part-of: advanced-observability
+    app.kubernetes.io/version: "1.0.0"
+    deployment-track: stable
 spec:
   replicas: 2
   revisionHistoryLimit: 3
@@ -34,7 +36,9 @@ spec:
       maxUnavailable: 0
       maxSurge: 1
   selector:
-    matchLabels: {app: traffic-ingest}
+    matchLabels:
+      app: traffic-ingest
+      deployment-track: stable
   template:
     metadata:
       labels:
@@ -42,6 +46,8 @@ spec:
         app.kubernetes.io/name: traffic-ingest
         app.kubernetes.io/component: ingestion
         app.kubernetes.io/part-of: advanced-observability
+        app.kubernetes.io/version: "1.0.0"
+        deployment-track: stable
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20
@@ -68,7 +74,7 @@ spec:
             - {name: shared-logs, mountPath: /logs}
       containers:
         - name: app
-          image: ckad/traffic-ingest:local
+          image: ckad/traffic-ingest:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: app-http

@@ -10,9 +10,12 @@ ACTION="${1:-run}"
 source "${ROOT_DIR}/labs/common/images.sh"
 
 deploy() {
+  : "${LAB_API_KEY:?Set LAB_API_KEY before running this lab}"
   kubectl apply -f "${ROOT_DIR}/labs/common/namespace.yaml"
   kubectl apply -f "${LAB_DIR}/configmap.yaml"
-  kubectl apply -f "${LAB_DIR}/secret.yaml"
+  kubectl create secret generic lab3-1-secret -n "$NAMESPACE" \
+    --from-literal=api-key="$LAB_API_KEY" \
+    --dry-run=client -o yaml | kubectl apply -f -
   IMAGE="$(resolve_workload_image "${IMAGE:-}" \
     advanced-observability traffic-ingest 'app=traffic-ingest')"
   kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
@@ -43,7 +46,7 @@ case "$ACTION" in
   cleanup)
     kubectl delete pod "$POD" -n "$NAMESPACE" --ignore-not-found
     kubectl delete -f "${LAB_DIR}/configmap.yaml" --ignore-not-found
-    kubectl delete -f "${LAB_DIR}/secret.yaml" --ignore-not-found
+    kubectl delete secret lab3-1-secret -n "$NAMESPACE" --ignore-not-found
     ;;
   *) printf 'Usage: %s {run|deploy|verify|status|cleanup}\n' "$0" >&2; exit 1 ;;
 esac

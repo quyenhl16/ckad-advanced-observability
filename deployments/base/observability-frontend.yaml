@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: observability-frontend
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: advanced-observability
+    app.kubernetes.io/version: "1.0.0"
 spec:
   type: NodePort
   selector: {app: observability-frontend}
@@ -25,6 +26,7 @@ metadata:
     app.kubernetes.io/name: observability-frontend
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: advanced-observability
+    app.kubernetes.io/version: "1.0.0"
 spec:
   replicas: 1
   revisionHistoryLimit: 3
@@ -37,6 +39,7 @@ spec:
         app.kubernetes.io/name: observability-frontend
         app.kubernetes.io/component: frontend
         app.kubernetes.io/part-of: advanced-observability
+        app.kubernetes.io/version: "1.0.0"
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20
@@ -63,7 +66,7 @@ spec:
             - {name: shared-logs, mountPath: /logs}
       containers:
         - name: app
-          image: ckad/observability-frontend:local
+          image: ckad/observability-frontend:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: app-http
