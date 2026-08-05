@@ -195,14 +195,115 @@ criteria. Use `--static-only` before deployment or save live evidence with:
   --report requirement-verification.txt
 ```
 
-Add the Ingress address to local DNS as `observability.local`, then use:
+### Verify Ingress end to end
+
+The main Ingress uses class `nginx` and host `observability.local`. It routes
+`/` to `observability-frontend:8083` and `/api/v1/metrics` to
+`traffic-ingest:8080`. Run the following checks from `node-1`:
 
 ```bash
-curl -H 'Host: observability.local' http://INGRESS_ADDRESS/
-curl -H 'Host: observability.local' \
+NS=advanced-observability
+INGRESS_NAMESPACE=ingress-nginx
+INGRESS_SERVICE=ingress-nginx-controller
+NODE_NAME=node-1
+
+echo "=== INGRESS CLASS AND RULES ==="
+kubectl get ingressclass
+kubectl get ingress advanced-observability -n "$NS" -o wide
+kubectl describe ingress advanced-observability -n "$NS"
+
+echo "=== BACKEND SERVICES AND ENDPOINTS ==="
+kubectl get service traffic-ingest observability-frontend -n "$NS"
+kubectl get endpointslice -n "$NS" \
+  -l 'kubernetes.io/service-name in (traffic-ingest,observability-frontend)'
+
+echo "=== INGRESS CONTROLLER ==="
+kubectl get pods,service -n "$INGRESS_NAMESPACE"
+kubectl rollout status deployment/ingress-nginx-controller \
+  -n "$INGRESS_NAMESPACE" \
+  --timeout=180s
+
+NODE_IP="$(
+  kubectl get node "$NODE_NAME" \
+    -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}'
+)"
+
+INGRESS_PORT="$(
+  kubectl get service "$INGRESS_SERVICE" \
+    -n "$INGRESS_NAMESPACE" \
+    -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}'
+)"
+
+test -n "$NODE_IP"
+test -n "$INGRESS_PORT"
+echo "Ingress endpoint: http://${NODE_IP}:${INGRESS_PORT}"
+
+echo "=== FRONTEND: EXPECT HTTP 200 ==="
+curl -i \
+  -H 'Host: observability.local' \
+  "http://${NODE_IP}:${INGRESS_PORT}/"
+
+echo "=== METRIC API: EXPECT HTTP 202 AND status=accepted ==="
+curl -i \
+  -H 'Host: observability.local' \
   -H 'Content-Type: application/json' \
-  -d '{"device_type":"router","device_id":"edge-01","cpu_usage_percent":45,"memory_usage_percent":55,"temperature_celsius":48,"latency_ms":220,"packet_loss_percent":1}' \
-  http://INGRESS_ADDRESS/api/v1/metrics
+  -d '{"device_type":"router","device_id":"ingress-check","cpu_usage_percent":45,"memory_usage_percent":55,"temperature_celsius":48,"latency_ms":120,"packet_loss_percent":1}' \
+  "http://${NODE_IP}:${INGRESS_PORT}/api/v1/metrics"
+```
+
+The frontend request must return `HTTP 200`. The metric request must return
+`HTTP 202` with JSON containing `"status":"accepted"`. On a bare-metal
+NodePort installation, an empty `ADDRESS` column on the Ingress is not by
+itself a failure.
+
+If either request fails, collect controller logs and recent application
+events:
+
+```bash
+kubectl logs deployment/ingress-nginx-controller \
+  -n ingress-nginx \
+  --tail=100
+
+kubectl get events -n advanced-observability \
+  --sort-by=.metadata.creationTimestamp | \
+  tail -n 30
+```
+
+Common results are `404` for an incorrect Host/rule, `503` for a backend
+Service without Ready endpoints, and connection refusal when the controller,
+NodePort or host firewall is unavailable.
+
+### Generate 1,000 traces for the Web UI
+
+From `node-1`, generate 1,000 metrics through the Ingress with:
+
+```bash
+chmod +x scripts/generate-traces.sh
+./scripts/generate-traces.sh
+```
+
+The script automatically discovers the HTTP NodePort of
+`ingress-nginx-controller`, sends requests with `Host: observability.local`,
+and saves every returned `trace_id` to a timestamped CSV file under `data/`.
+Every third sample exceeds the configured 150 ms latency threshold, so both
+normal events and alerts appear in the dashboard. It prints the dashboard URL
+and a link filtered by the latest trace when complete. Add the printed
+`NODE_IP observability.local` mapping to the browser machine's `/etc/hosts` (or
+local DNS) when that hostname is not already resolvable. The Web UI displays
+the latest 100 events and alerts; the CSV retains the mapping for all 1,000
+generated traces.
+
+Override the sample count or endpoint when required:
+
+```bash
+# Smaller Ingress run
+COUNT=100 ./scripts/generate-traces.sh
+
+# Use local port-forwards instead of Ingress
+COUNT=1000 \
+TARGET_URL=http://127.0.0.1:8080/api/v1/metrics \
+WEB_UI_URL=http://127.0.0.1:8083/ \
+./scripts/generate-traces.sh
 ```
 
 Port-forwarding remains available when the Ingress controller is unavailable:
