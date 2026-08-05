@@ -627,14 +627,19 @@ fi
 begin_check K1 Required 'Cluster/tooling prerequisites' \
   'The live environment provides kubectl, Kubernetes, policy-capable networking, IngressClass, Metrics Server and a default StorageClass; Helm is available for its demo.'
 if [[ "$LIVE_AVAILABLE" == true ]]; then
-  run_command "kubectl version; kubectl get nodes; kubectl get ingressclass; kubectl get deployment metrics-server -n kube-system; kubectl get storageclass; helm version --short"
+  run_command "kubectl version; kubectl get nodes; kubectl get ingressclass; kubectl get deployment -A | grep -i metrics-server || true; kubectl get apiservice v1beta1.metrics.k8s.io; kubectl top nodes; kubectl get storageclass; helm version --short"
   default_sc="$(kubectl get storageclass -o jsonpath='{range .items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")]}{.metadata.name}{" "}{end}' 2>/dev/null || true)"
   ingress_count="$(kubectl get ingressclass --no-headers 2>/dev/null | wc -l | tr -d ' ')"
-  metrics_ready="$(kubectl get deployment metrics-server -n kube-system -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)"
-  if [[ $HELM_AVAILABLE -eq 0 && -n "$default_sc" && "$ingress_count" -ge 1 && "${metrics_ready:-0}" -ge 1 ]]; then
-    pass_check "Cluster prerequisites found: default StorageClass=${default_sc}, IngressClass count=${ingress_count}, Metrics Server replicas=${metrics_ready}. CNI policy enforcement still requires the live allowed/denied demo."
+  metrics_deployments="$(kubectl get deployment -A --no-headers 2>/dev/null | awk 'tolower($2) ~ /metrics-server/ {printf "%s/%s=%s ", $1, $2, $5}' || true)"
+  metrics_api_available="$(kubectl get apiservice v1beta1.metrics.k8s.io -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)"
+  metrics_query=false
+  if kubectl top nodes --no-headers >/dev/null 2>&1; then
+    metrics_query=true
+  fi
+  if [[ $HELM_AVAILABLE -eq 0 && -n "$default_sc" && "$ingress_count" -ge 1 && "$metrics_api_available" == True && "$metrics_query" == true ]]; then
+    pass_check "Cluster prerequisites found: default StorageClass=${default_sc}, IngressClass count=${ingress_count}, Metrics API Available=True, metrics query=yes, deployments=${metrics_deployments:-API-backed installation}. CNI policy enforcement still requires the live allowed/denied demo."
   else
-    fail_check "Missing prerequisite: helm=$([[ $HELM_AVAILABLE -eq 0 ]] && echo yes || echo no), defaultSC=${default_sc:-missing}, ingressClasses=${ingress_count}, metricsReplicas=${metrics_ready:-0}."
+    fail_check "Missing prerequisite: helm=$([[ $HELM_AVAILABLE -eq 0 ]] && echo yes || echo no), defaultSC=${default_sc:-missing}, ingressClasses=${ingress_count}, metricsAPI=${metrics_api_available:-missing}, metricsQuery=${metrics_query}, metricsDeployments=${metrics_deployments:-missing}."
   fi
 else
   run_command "grep -n -E 'Kubernetes 1.35|policy-capable CNI|Ingress controller|Metrics Server|default.*StorageClass|kubectl.*Helm 3' ${ROOT_Q}/README.md"

@@ -48,11 +48,38 @@ spec:
       initContainers:
         - name: config-init
           image: postgres:17-alpine
-          command: [sh, -c, 'sed "s/PUBLIC_PORT/8082/g; s/APP_PORT/18082/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log && chgrp 65532 /logs/access.log && chmod 0664 /logs/access.log && until pg_isready -h observability-db -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done']
+          command:
+            - sh
+            - -ec
+            - |
+              sed "s/PUBLIC_PORT/8082/g; s/APP_PORT/18082/g" \
+                /templates/nginx.conf.template > /generated/nginx.conf
+              touch /logs/access.log
+              chgrp 65532 /logs/access.log
+              chmod 0664 /logs/access.log
+
+              for attempt in $(seq 1 60); do
+                if PGPASSWORD="$POSTGRES_PASSWORD" psql \
+                  -h observability-db \
+                  -U "$POSTGRES_USER" \
+                  -d "$POSTGRES_DB" \
+                  -v ON_ERROR_STOP=1 \
+                  -c 'SELECT 1' >/dev/null 2>&1; then
+                  exit 0
+                fi
+                echo "Waiting for authenticated PostgreSQL connection (${attempt}/60)" >&2
+                sleep 2
+              done
+
+              echo "PostgreSQL authentication did not become ready" >&2
+              exit 1
           env:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: observability-secrets, key: POSTGRES_PASSWORD}
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: POSTGRES_DB}

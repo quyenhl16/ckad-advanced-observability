@@ -199,6 +199,7 @@ SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
 SMTP_USERNAME="${SMTP_USERNAME:-unused}"
 SMTP_PASSWORD="${SMTP_PASSWORD:-unused}"
 SMTP_FROM="${SMTP_FROM:-alerts@example.com}"
+DEPLOY_REVISION="$(date -u +%Y%m%d%H%M%S)-$$"
 
 for secret_name in \
   POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB ALERT_API_KEY \
@@ -312,6 +313,31 @@ secretGenerator:
       - secrets.env
 generatorOptions:
   disableNameSuffixHash: true
+patches:
+  - target:
+      kind: StatefulSet
+      name: observability-db
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/annotations
+        value:
+          observability.io/deploy-revision: ${DEPLOY_REVISION}
+  - target:
+      kind: Deployment
+      name: alert-manager
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/annotations
+        value:
+          observability.io/deploy-revision: ${DEPLOY_REVISION}
+  - target:
+      kind: Deployment
+      name: analytics-engine
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/annotations
+        value:
+          observability.io/deploy-revision: ${DEPLOY_REVISION}
 EOF
 
 log "Step 4/7: Validate generated Kubernetes manifests"
@@ -325,6 +351,17 @@ if ! kubectl rollout status statefulset/observability-db \
   --namespace "$NAMESPACE" --timeout "$ROLLOUT_TIMEOUT"; then
   kubectl get pods --namespace "$NAMESPACE" -o wide
   die "Database rollout failed"
+fi
+
+log "Synchronize the retained PostgreSQL role with the current Secret"
+if ! printf '%s\n' "ALTER ROLE CURRENT_USER WITH PASSWORD :'db_password';" | \
+  kubectl exec -i pod/observability-db-0 --namespace "$NAMESPACE" -- \
+  sh -ec 'psql \
+    --username "$POSTGRES_USER" \
+    --dbname "$POSTGRES_DB" \
+    --set=ON_ERROR_STOP=1 \
+    --set=db_password="$POSTGRES_PASSWORD"'; then
+  die "Could not synchronize the PostgreSQL role password; POSTGRES_USER and POSTGRES_DB must match the retained database"
 fi
 
 for deployment in alert-manager analytics-engine traffic-ingest observability-frontend; do

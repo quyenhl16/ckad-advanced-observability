@@ -155,15 +155,16 @@ required to prevent accidental namespace deletion:
 The script validates the Kubernetes context and exact resource names, then
 deletes only the namespace, PV object and project StorageClass. It never uses
 SSH and leaves `/var/lib/observability-postgres` unchanged. Because that
-directory contains the existing PostgreSQL cluster, redeploy with the same
-`POSTGRES_PASSWORD`; changing it does not update the password already stored in
-the retained database.
+directory contains the existing PostgreSQL cluster, keep `POSTGRES_USER` and
+`POSTGRES_DB` unchanged. The deployment script safely updates that role to the
+current `POSTGRES_PASSWORD`, then recreates Secret-consuming Pods so they all
+load the same credentials.
 
 To redeploy from `node-1`, authenticate to the image registry, set fresh
 secrets and run:
 
 ```bash
-export POSTGRES_PASSWORD='use-the-existing-database-password'
+export POSTGRES_PASSWORD='use-a-strong-database-password'
 export ALERT_API_KEY='use-a-different-strong-value'
 
 ./scripts/deploy.sh \
