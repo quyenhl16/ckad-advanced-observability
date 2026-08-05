@@ -20,7 +20,7 @@ Every lab directory contains a reference manifest and a `run.sh` exam-speed
 script. Make all scripts executable on CentOS:
 
 ```bash
-find labs -name run.sh -exec chmod +x {} +
+find labs -name '*.sh' -exec chmod +x {} +
 ```
 
 The scripts first use an explicit `IMAGE`, otherwise they copy the image from a
@@ -85,6 +85,31 @@ Run each complete Day 5 workflow with its default `run` action:
 ./labs/day5/lab5.3/run.sh
 ./labs/day5/lab5.4/run.sh
 ```
+
+## Verify each day
+
+After completing all four labs for a day, run its live verifier. Every check
+prints the lab requirement, commands used, raw output, evidence and a final
+`VERIFY: PASS` or `VERIFY: FAIL` result:
+
+```bash
+./labs/day1/verify.sh --report day1-verification.txt
+./labs/day2/verify.sh --report day2-verification.txt
+./labs/day3/verify.sh --report day3-verification.txt
+./labs/day4/verify.sh --report day4-verification.txt
+./labs/day5/verify.sh --report day5-verification.txt
+```
+
+Run every day and create one report per day:
+
+```bash
+./labs/verify-all.sh --report-dir lab-verification-reports
+```
+
+These are live checks. Missing lab resources produce `FAIL`; run the associated
+`labs/dayN/labN.X/run.sh run` workflow before rerunning the day verifier. The
+Day 3 quota check performs the expected admission-rejection test, Day 4 uses
+short-lived network probes, and Day 5 verifies Metrics Server and Helm output.
 
 Clean all namespaced lab resources when finished:
 

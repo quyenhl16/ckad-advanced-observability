@@ -327,6 +327,20 @@ verify Metrics Server and container CPU requests.
 Run `./scripts/demo.sh` for the 5–10 minute guided inspection. The complete
 manual presentation order is documented in [ckad-checklist.md](docs/ckad-checklist.md).
 
+## CKAD labs
+
+The repository includes 20 hands-on labs across five days. See
+[labs/README.md](labs/README.md) for the execution order and prerequisites.
+After completing the labs, verify every requirement and save one report per
+day with:
+
+```bash
+./labs/verify-all.sh --report-dir lab-verification-reports
+```
+
+Each report prints the requirement, command, raw output, evidence and
+`VERIFY: PASS` or `VERIFY: FAIL` for all four labs in that day.
+
 ## Known limitations
 
 - `analytics-engine` keeps recent event history in Pod-local `emptyDir`; a
