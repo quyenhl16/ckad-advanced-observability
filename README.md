@@ -137,6 +137,51 @@ kubectl create secret generic observability-secrets \
 kubectl apply -k deployments/overlays/dev
 ```
 
+## Full cleanup and redeploy
+
+Use this procedure when a completely fresh database and deployment are
+required. It removes the project namespace, the project-specific local PV and
+its `observability-local` StorageClass. Deleting the namespace also removes any
+Helm release metadata stored in that namespace. It does **not** remove shared
+cluster components such as the CNI, Ingress controller, Metrics Server or the
+default dynamic StorageClass.
+
+From `node-1`, run the cleanup script. The confirmation value is deliberately
+required to prevent accidental namespace deletion:
+
+```bash
+./scripts/cleanup.sh --confirm advanced-observability
+```
+
+The script validates the Kubernetes context and exact resource names, deletes
+the namespace/PV/StorageClass, then connects to `node-2` through SSH. Because
+the PV uses `Retain`, it permanently removes all contents below
+`/var/lib/observability-postgres` and recreates the empty directory with UID/GID
+70. Before deletion it validates the resolved path, refuses a root symlink and
+lists every target; nested symlinks are removed without being followed. Use
+another SSH hostname when necessary:
+
+```bash
+./scripts/cleanup.sh --confirm advanced-observability --data-node node-2
+```
+
+To redeploy from `node-1`, authenticate to the image registry, set fresh
+secrets and run:
+
+```bash
+export POSTGRES_PASSWORD='use-a-new-strong-value'
+export ALERT_API_KEY='use-a-different-strong-value'
+
+./scripts/deploy.sh \
+  --cluster generic \
+  --overlay prod \
+  --registry registry.example.com/team
+
+./scripts/smoke-test.sh
+./scripts/verify-requirements.sh --overlay prod \
+  --report requirement-verification.txt
+```
+
 ## Verify and access
 
 ```bash
