@@ -105,17 +105,21 @@ spec:
             - name: SMTP_FROM
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: SMTP_FROM}
-            - name: POSTGRES_USER
+            - name: PGHOST
+              value: observability-db
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: POSTGRES_USER}
-            - name: POSTGRES_PASSWORD
+            - name: PGPASSWORD
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: POSTGRES_PASSWORD}
-            - name: POSTGRES_DB
+            - name: PGDATABASE
               valueFrom:
                 secretKeyRef: {name: observability-secrets, key: POSTGRES_DB}
-            - name: DATABASE_URL
-              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@observability-db:5432/$(POSTGRES_DB)?sslmode=disable
+            - name: PGSSLMODE
+              value: disable
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532

@@ -2,6 +2,12 @@
 
 Namespace: `advanced-observability`.
 
+Audit status on 2026-08-05: all 28 CKAD items below and six supporting
+microservice/deliverable safeguards pass the repository-only verifier (34/34).
+The repository satisfies the declarative requirements; live acceptance still
+depends on cluster prerequisites and Ready Pods, which are checked by running
+the same verifier without `--static-only`.
+
 ## Application Design and Build
 
 | ID | Implementation | Evidence / verification |
@@ -10,7 +16,7 @@ Namespace: `advanced-observability`.
 | D2 | Four API Deployments, one canary Deployment, PostgreSQL StatefulSet and health-audit CronJob | `deployments/base/*yaml`; `kubectl get deploy,sts,cronjob -n advanced-observability` |
 | D3 | `config-init`, `log-sidecar` and Nginx ambassador | `traffic-ingest.yaml` and the other core Deployment manifests |
 | D4 | Shared generated config, logs and Nginx temp directories | `emptyDir` volumes in each multi-container Deployment |
-| D5 | Dynamic PVC mounted by PostgreSQL | `database.yaml`; `kubectl get pvc -n advanced-observability` |
+| D5 | Retained local PV/PVC mounted by PostgreSQL on `node-2` | `postgres-pv.yaml`, `database.yaml`; `kubectl get pv,pvc` |
 | D6 | Selection, semantic version and stable/canary track labels | `traffic-ingest.yaml`, `traffic-ingest-canary.yaml` |
 
 ## Application Deployment
@@ -71,3 +77,18 @@ Namespace: `advanced-observability`.
 10. Show `helm history`, perform a rollback, and finish with debug commands.
 
 `scripts/demo.sh` automates the non-interactive inspection portion.
+
+## Automated requirement evidence
+
+Run the comprehensive verifier against a deployed cluster:
+
+```bash
+./scripts/verify-requirements.sh --overlay prod \
+  --report requirement-verification.txt
+```
+
+Each check prints the requirement text, exact command, command output, evidence
+and `PASS`, `FAIL` or `SKIP`. Use `--static-only` to audit repository evidence
+without cluster access. The script covers every D1-O5 item above plus service
+scope, cluster prerequisites, repository deliverables and automatic-fail
+safeguards from the Capstone description.

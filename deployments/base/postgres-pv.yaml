@@ -1,0 +1,36 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: observability-local
+  labels:
+    app.kubernetes.io/name: observability-db
+    app.kubernetes.io/part-of: advanced-observability
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: observability-db-pv-node2
+  labels:
+    app.kubernetes.io/name: observability-db
+    app.kubernetes.io/part-of: advanced-observability
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: observability-local
+  local:
+    path: /var/lib/observability-postgres
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - node-2

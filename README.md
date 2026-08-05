@@ -35,7 +35,7 @@ The capstone deployment includes:
   a second canary Deployment;
 - init containers, log sidecars, an Nginx ambassador and shared `emptyDir`
   volumes;
-- a PostgreSQL StatefulSet backed by a dynamically provisioned PVC;
+- a PostgreSQL StatefulSet backed by a retained local PV/PVC on `node-2`;
 - stable/canary traffic sharing, rolling updates, HPA and PDB;
 - ConfigMaps, runtime-generated Secret, restricted security contexts, custom
   ServiceAccount/RBAC, ResourceQuota and LimitRange;
@@ -55,7 +55,10 @@ The evidence map for every mandatory item is in
 - a policy-capable CNI
 - Nginx Ingress controller with IngressClass `nginx`
 - Metrics Server for HPA and `kubectl top`
-- a default dynamic StorageClass
+- a default dynamic StorageClass available for the class cluster; this project
+  intentionally demonstrates a static local PV for PostgreSQL
+- a node named `node-2` with `/var/lib/observability-postgres` prepared for
+  the PostgreSQL local PersistentVolume
 - `kubectl`, Helm 3, Docker or Podman, and Bash
 - permission to use the dedicated `advanced-observability` namespace
 
@@ -138,7 +141,18 @@ kubectl apply -k deployments/overlays/dev
 
 ```bash
 ./scripts/smoke-test.sh
+./scripts/verify-requirements.sh --overlay dev
 kubectl get pods,svc,endpointslices,hpa,ingress,pvc -n advanced-observability
+```
+
+The requirement verifier prints every requirement, the command executed, its
+output, evidence and a `PASS`, `FAIL` or `SKIP` result. It covers the mandatory
+CKAD checklist plus microservice, cluster, deliverable and automatic-fail
+criteria. Use `--static-only` before deployment or save live evidence with:
+
+```bash
+./scripts/verify-requirements.sh --overlay prod \
+  --report requirement-verification.txt
 ```
 
 Add the Ingress address to local DNS as `observability.local`, then use:
@@ -279,6 +293,8 @@ manual presentation order is documented in [ckad-checklist.md](docs/ckad-checkli
   production version would send this stream to object storage or a dedicated
   time-series database.
 - PostgreSQL demonstrates persistence, not database high availability.
+- Its local PV pins the database to `node-2`; node loss requires manual data
+  recovery and the retained PV claim must be released before namespace reuse.
 - SMTP defaults to log-only notification; real mail requires SMTP credentials
   and a narrowly scoped egress destination.
 - The canary ratio is replica-based rather than request-weighted and changes

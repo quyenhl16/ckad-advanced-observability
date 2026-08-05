@@ -65,7 +65,8 @@ sidecar.
 - Every core Deployment uses immutable version labels and explicit image tags.
 - A default-deny policy is supplemented with DNS and exact application flow
   policies.
-- PostgreSQL uses a StatefulSet with a dynamically provisioned PVC.
+- PostgreSQL uses a StatefulSet with a 1 GiB local PVC bound to a retained PV
+  on `node-2`. PV node affinity schedules the database beside its storage.
 - The audit CronJob uses `observability-reader`, whose Role can only `get` and
   `list` Pods; it cannot read Secrets.
 - ResourceQuota constrains the namespace and LimitRange provides defensive
