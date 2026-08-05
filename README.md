@@ -139,12 +139,11 @@ kubectl apply -k deployments/overlays/dev
 
 ## Full cleanup and redeploy
 
-Use this procedure when a completely fresh database and deployment are
-required. It removes the project namespace, the project-specific local PV and
-its `observability-local` StorageClass. Deleting the namespace also removes any
-Helm release metadata stored in that namespace. It does **not** remove shared
-cluster components such as the CNI, Ingress controller, Metrics Server or the
-default dynamic StorageClass.
+Use this procedure to remove and recreate the Kubernetes deployment. It removes
+the project namespace, the project-specific local PV object and its
+`observability-local` StorageClass. Deleting the namespace also removes any Helm
+release metadata stored there. It does **not** remove shared cluster components
+or the PostgreSQL files stored on `node-2`.
 
 From `node-1`, run the cleanup script. The confirmation value is deliberately
 required to prevent accidental namespace deletion:
@@ -153,23 +152,18 @@ required to prevent accidental namespace deletion:
 ./scripts/cleanup.sh --confirm advanced-observability
 ```
 
-The script validates the Kubernetes context and exact resource names, deletes
-the namespace/PV/StorageClass, then connects to `node-2` through SSH. Because
-the PV uses `Retain`, it permanently removes all contents below
-`/var/lib/observability-postgres` and recreates the empty directory with UID/GID
-70. Before deletion it validates the resolved path, refuses a root symlink and
-lists every target; nested symlinks are removed without being followed. Use
-another SSH hostname when necessary:
-
-```bash
-./scripts/cleanup.sh --confirm advanced-observability --data-node node-2
-```
+The script validates the Kubernetes context and exact resource names, then
+deletes only the namespace, PV object and project StorageClass. It never uses
+SSH and leaves `/var/lib/observability-postgres` unchanged. Because that
+directory contains the existing PostgreSQL cluster, redeploy with the same
+`POSTGRES_PASSWORD`; changing it does not update the password already stored in
+the retained database.
 
 To redeploy from `node-1`, authenticate to the image registry, set fresh
 secrets and run:
 
 ```bash
-export POSTGRES_PASSWORD='use-a-new-strong-value'
+export POSTGRES_PASSWORD='use-the-existing-database-password'
 export ALERT_API_KEY='use-a-different-strong-value'
 
 ./scripts/deploy.sh \
