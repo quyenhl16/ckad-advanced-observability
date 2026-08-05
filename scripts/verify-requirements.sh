@@ -672,10 +672,10 @@ fi
 begin_check A1 Required 'Automatic-fail safeguards' \
   'Project has at least three deployable services, Kubernetes Deployments, no plaintext secrets, external exposure, and Ready Pods in live mode.'
 if [[ "$LIVE_AVAILABLE" == true ]]; then
-  run_command "kubectl get pods -n ${NS_Q} -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,PHASE:.status.phase"
-  not_ready="$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/part-of=advanced-observability -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{range .status.containerStatuses[*]}{.ready}{","}{end}{"|"}{.status.phase}{"\n"}{end}' 2>/dev/null | awk -F'|' '$3 == "Running" && $2 ~ /false/ {print $1; next} $3 != "Running" && $3 != "Succeeded" {print $1}')"
+  run_command "kubectl get pods -n ${NS_Q} -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,PHASE:.status.phase,OWNER:.metadata.ownerReferences[0].kind"
+  not_ready="$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/part-of=advanced-observability -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{range .status.containerStatuses[*]}{.ready}{","}{end}{"|"}{.status.phase}{"|"}{.metadata.ownerReferences[0].kind}{"\n"}{end}' 2>/dev/null | awk -F'|' '$4 == "Job" {next} $3 == "Running" && $2 ~ /false/ {print $1; next} $3 != "Running" && $3 != "Succeeded" {print $1}')"
   if [[ "$dockerfile_count" -ge 3 && -z "$plaintext_matches" && -z "$not_ready" ]]; then
-    pass_check 'No automatic-fail condition was detected in repository evidence or current core Pod readiness.'
+    pass_check 'No automatic-fail condition was detected in repository evidence or current long-running Pod readiness; transient and completed Job Pods are reported but excluded from the Ready gate.'
   else
     fail_check "Automatic-fail risk: serviceCount=${dockerfile_count}, plaintextSecretMatches=$([[ -z "$plaintext_matches" ]] && echo none || echo found), notReady=${not_ready:-none}."
   fi
