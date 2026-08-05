@@ -25,12 +25,17 @@ verify_lab_3_2() {
 }
 
 verify_lab_3_3() {
+  local can_list_pods can_get_secrets
   kubectl get serviceaccount,pod -n "$NAMESPACE" -l lab=3.3 || return 1
   kubectl get role,rolebinding pod-reader -n "$NAMESPACE" || return 1
-  printf 'listPods='
-  kubectl auth can-i list pods --as=system:serviceaccount:${NAMESPACE}:pod-reader -n "$NAMESPACE" || return 1
-  printf 'getSecrets='
-  kubectl auth can-i get secrets --as=system:serviceaccount:${NAMESPACE}:pod-reader -n "$NAMESPACE" || return 1
+  can_list_pods="$(kubectl auth can-i list pods \
+    --as=system:serviceaccount:${NAMESPACE}:pod-reader \
+    -n "$NAMESPACE" 2>/dev/null || true)"
+  can_get_secrets="$(kubectl auth can-i get secrets \
+    --as=system:serviceaccount:${NAMESPACE}:pod-reader \
+    -n "$NAMESPACE" 2>/dev/null || true)"
+  printf 'listPods=%s\ngetSecrets=%s\n' "$can_list_pods" "$can_get_secrets"
+  [[ "$can_list_pods" == yes && "$can_get_secrets" == no ]] || return 1
   bash "${DAY_DIR}/lab3.3/run.sh" verify
 }
 
