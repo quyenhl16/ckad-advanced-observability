@@ -178,8 +178,10 @@ open `http://observability.local:INGRESS_PORT/`. To populate the dashboard:
 ./scripts/generate-traces.sh
 ```
 
-The generator submits 1,000 metrics by default and writes every returned trace
-ID to a timestamped CSV under `data/`.
+The generator submits 300 metrics by default and writes every returned trace ID
+to a timestamped CSV under `data/`. It creates 264 one-request devices followed
+by five history devices with 5, 6, 7, 8 and 10 requests, so their complete
+history remains visible in the dashboard's latest-100 event window.
 
 ## Essential operations
 
@@ -194,10 +196,11 @@ chmod +x scripts/clear-database.sh
 ./scripts/clear-database.sh --confirm DELETE-ALL-DATA
 ```
 
-The script temporarily stops `alert-manager`, truncates all non-system tables,
-restarts their sequences, verifies zero rows and restores the original replica
-count. Analytics event history is separate because it lives in Pod-local
-`emptyDir`. See the [operations guide](docs/operations-guide.md#clear-postgresql-data).
+The script keeps all workloads running, truncates every non-system table,
+restarts its sequences and verifies zero rows inside the cleanup transaction.
+New rows can appear immediately afterward if traffic remains active. Analytics
+event history is separate because it lives in Pod-local `emptyDir`. See the
+[operations guide](docs/operations-guide.md#clear-postgresql-data).
 
 ### Rolling update and rollback
 

@@ -3,12 +3,9 @@ set -Eeuo pipefail
 
 readonly NAMESPACE="${NAMESPACE:-advanced-observability}"
 readonly DATABASE_POD="observability-db-0"
-readonly WRITER_DEPLOYMENT="alert-manager"
 readonly CONFIRMATION_TOKEN="DELETE-ALL-DATA"
 
 CONFIRMATION=""
-WRITER_REPLICAS=""
-WRITER_SCALED=false
 
 usage() {
   cat <<'EOF'
@@ -18,10 +15,7 @@ Usage:
 Permanently remove all rows from every non-system PostgreSQL table while
 retaining the database, schemas, roles, passwords and table definitions.
 Sequences are restarted and foreign-key relationships are handled with
-CASCADE. No backup is created.
-
-The script temporarily scales alert-manager to zero to prevent concurrent
-database writes, then restores its original replica count on success or error.
+CASCADE. No backup is created and application workloads remain running.
 
 Options:
   --confirm TOKEN      Required; must equal DELETE-ALL-DATA
@@ -38,31 +32,6 @@ require_command() {
     exit 1
   }
 }
-
-restore_writer_on_exit() {
-  local exit_code=$?
-  trap - EXIT
-
-  if [[ "$WRITER_SCALED" == true && "$WRITER_REPLICAS" =~ ^[0-9]+$ ]]; then
-    printf '\nRestoring %s to %s replica(s)...\n' \
-      "$WRITER_DEPLOYMENT" "$WRITER_REPLICAS" >&2
-    if ! kubectl scale "deployment/${WRITER_DEPLOYMENT}" \
-      --namespace "$NAMESPACE" \
-      --replicas "$WRITER_REPLICAS"; then
-      printf 'WARNING: failed to restore %s; restore it manually.\n' \
-        "$WRITER_DEPLOYMENT" >&2
-    elif ((WRITER_REPLICAS > 0)); then
-      kubectl rollout status "deployment/${WRITER_DEPLOYMENT}" \
-        --namespace "$NAMESPACE" \
-        --timeout=180s || \
-        printf 'WARNING: %s did not become Ready before timeout.\n' \
-          "$WRITER_DEPLOYMENT" >&2
-    fi
-  fi
-
-  exit "$exit_code"
-}
-trap restore_writer_on_exit EXIT
 
 while (($# > 0)); do
   case "$1" in
@@ -101,10 +70,10 @@ require_command kubectl
 printf 'Kubernetes context: '
 kubectl config current-context
 printf 'Database cleanup target:\n'
-printf '  namespace:         %s\n' "$NAMESPACE"
-printf '  database Pod:      %s\n' "$DATABASE_POD"
-printf '  writer Deployment: %s\n' "$WRITER_DEPLOYMENT"
-printf '  backup:            none\n'
+printf '  namespace:    %s\n' "$NAMESPACE"
+printf '  database Pod: %s\n' "$DATABASE_POD"
+printf '  backup:       none\n'
+printf '  workloads:    remain running\n'
 
 kubectl get namespace "$NAMESPACE" >/dev/null
 kubectl get "pod/${DATABASE_POD}" --namespace "$NAMESPACE" >/dev/null
@@ -112,42 +81,6 @@ kubectl wait "pod/${DATABASE_POD}" \
   --namespace "$NAMESPACE" \
   --for=condition=Ready \
   --timeout=120s
-
-WRITER_REPLICAS="$(
-  kubectl get "deployment/${WRITER_DEPLOYMENT}" \
-    --namespace "$NAMESPACE" \
-    -o jsonpath='{.spec.replicas}'
-)"
-[[ "$WRITER_REPLICAS" =~ ^[0-9]+$ ]] || {
-  printf 'ERROR: invalid replica count for %s: %s\n' \
-    "$WRITER_DEPLOYMENT" "$WRITER_REPLICAS" >&2
-  exit 1
-}
-
-if ((WRITER_REPLICAS > 0)); then
-  printf '\nScaling %s from %s to 0 to stop database writes...\n' \
-    "$WRITER_DEPLOYMENT" "$WRITER_REPLICAS"
-  WRITER_SCALED=true
-  kubectl scale "deployment/${WRITER_DEPLOYMENT}" \
-    --namespace "$NAMESPACE" \
-    --replicas=0
-
-  deadline=$((SECONDS + 120))
-  while ((SECONDS < deadline)); do
-    writer_pods="$(
-      kubectl get pods --namespace "$NAMESPACE" \
-        --selector "app=${WRITER_DEPLOYMENT}" \
-        -o name
-    )"
-    [[ -z "$writer_pods" ]] && break
-    sleep 2
-  done
-  [[ -z "$writer_pods" ]] || {
-    printf 'ERROR: writer Pods were not removed before timeout:\n%s\n' \
-      "$writer_pods" >&2
-    exit 1
-  }
-fi
 
 printf '\nDeleting all rows and restarting table sequences...\n'
 kubectl exec -i "pod/${DATABASE_POD}" \
@@ -231,20 +164,7 @@ ORDER BY schemaname, tablename
 \gexec
 SQL
 
-if [[ "$WRITER_SCALED" == true ]]; then
-  printf '\nRestoring %s to %s replica(s)...\n' \
-    "$WRITER_DEPLOYMENT" "$WRITER_REPLICAS"
-  kubectl scale "deployment/${WRITER_DEPLOYMENT}" \
-    --namespace "$NAMESPACE" \
-    --replicas "$WRITER_REPLICAS"
-  if ((WRITER_REPLICAS > 0)); then
-    kubectl rollout status "deployment/${WRITER_DEPLOYMENT}" \
-      --namespace "$NAMESPACE" \
-      --timeout=180s
-  fi
-  WRITER_SCALED=false
-fi
-
 printf '\nDatabase data cleanup completed successfully.\n'
 printf 'Schemas, tables, roles and credentials were retained.\n'
+printf 'Workloads were not scaled; new rows may appear if traffic is still active.\n'
 printf 'Analytics event history is stored separately in the analytics Pod emptyDir.\n'

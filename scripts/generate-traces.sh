@@ -7,7 +7,7 @@ readonly INGRESS_NAMESPACE="${INGRESS_NAMESPACE:-ingress-nginx}"
 readonly INGRESS_SERVICE="${INGRESS_SERVICE:-ingress-nginx-controller}"
 readonly INGRESS_HOST="${INGRESS_HOST:-observability.local}"
 readonly NODE_NAME="${NODE_NAME:-node-1}"
-readonly COUNT="${COUNT:-1000}"
+readonly COUNT="${COUNT:-300}"
 readonly OUTPUT_FILE="${OUTPUT_FILE:-${ROOT_DIR}/data/generated-traces-$(date -u +%Y%m%dT%H%M%SZ).csv}"
 
 TARGET_URL="${TARGET_URL:-}"
@@ -25,7 +25,7 @@ Generate metric requests through the project Ingress. Every accepted request
 creates a trace, and every third sample exceeds the default 150 ms threshold.
 
 Environment:
-  COUNT                 Number of samples (default: 1000)
+  COUNT                 Number of samples (default: 300, minimum: 36)
   NAMESPACE             Project namespace (default: advanced-observability)
   NODE_NAME             Kubernetes node exposed by NodePort (default: node-1)
   INGRESS_NAMESPACE     Ingress controller namespace (default: ingress-nginx)
@@ -63,8 +63,8 @@ if (($# > 0)); then
   esac
 fi
 
-[[ "$COUNT" =~ ^[1-9][0-9]*$ ]] && ((COUNT <= 100000)) || {
-  printf 'ERROR: COUNT must be an integer from 1 to 100000.\n' >&2
+[[ "$COUNT" =~ ^[1-9][0-9]*$ ]] && ((COUNT >= 36 && COUNT <= 100000)) || {
+  printf 'ERROR: COUNT must be an integer from 36 to 100000.\n' >&2
   exit 2
 }
 
@@ -114,24 +114,54 @@ mkdir -p "$output_directory"
 }
 
 printf '%s\n' \
-  'sequence,observed_at,device_type,device_id,trace_id,latency_ms,expected_status' \
+  'sequence,observed_at,sample_group,device_type,device_id,device_request,trace_id,latency_ms,expected_status' \
   > "$OUTPUT_FILE"
 
 readonly DEVICE_TYPES=(router switch server firewall access_point)
+readonly HISTORY_REQUEST_COUNTS=(5 6 7 8 10)
+history_sample_count=0
+for history_request_count in "${HISTORY_REQUEST_COUNTS[@]}"; do
+  ((history_sample_count += history_request_count))
+done
+readonly history_sample_count
+readonly unique_sample_count=$((COUNT - history_sample_count))
+
 accepted=0
 expected_alerts=0
 last_trace_id=""
 started_at="$(date +%s)"
 
 printf 'Generating %d trace samples\n' "$COUNT"
+printf 'Dataset: %d one-request devices + %d history samples\n' \
+  "$unique_sample_count" "$history_sample_count"
+printf 'History devices: router=5, switch=6, server=7, firewall=8, access_point=10 requests\n'
 printf 'Metric endpoint: %s (Host: %s)\n' "$TARGET_URL" "$INGRESS_HOST"
 printf 'Trace mapping:  %s\n\n' "$OUTPUT_FILE"
 
 for ((index = 1; index <= COUNT; index++)); do
-  type_index=$(((index - 1) % ${#DEVICE_TYPES[@]}))
-  device_type="${DEVICE_TYPES[$type_index]}"
-  device_sequence=$((((index - 1) / ${#DEVICE_TYPES[@]}) % 20 + 1))
-  printf -v device_id 'demo-%s-%03d' "$device_type" "$device_sequence"
+  if ((index <= unique_sample_count)); then
+    sample_group=single
+    type_index=$(((index - 1) % ${#DEVICE_TYPES[@]}))
+    device_type="${DEVICE_TYPES[$type_index]}"
+    device_sequence=$(((index - 1) / ${#DEVICE_TYPES[@]} + 1))
+    device_request=1
+    printf -v device_id 'sample-%s-%03d' "$device_type" "$device_sequence"
+  else
+    sample_group=history
+    history_offset=$((index - unique_sample_count - 1))
+    history_cursor=0
+    for ((candidate = 0; candidate < ${#DEVICE_TYPES[@]}; candidate++)); do
+      history_request_count="${HISTORY_REQUEST_COUNTS[$candidate]}"
+      if ((history_offset < history_cursor + history_request_count)); then
+        type_index=$candidate
+        device_type="${DEVICE_TYPES[$type_index]}"
+        device_request=$((history_offset - history_cursor + 1))
+        printf -v device_id 'history-%s-01' "$device_type"
+        break
+      fi
+      ((history_cursor += history_request_count))
+    done
+  fi
 
   cpu=$((20 + (index * 17) % 76))
   memory=$((25 + (index * 13) % 71))
@@ -180,13 +210,14 @@ for ((index = 1; index <= COUNT; index++)); do
   fi
 
   observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf '%d,%s,%s,%s,%s,%d,%s\n' \
-    "$index" "$observed_at" "$device_type" "$device_id" "$trace_id" \
-    "$latency" "$expected_status" >> "$OUTPUT_FILE"
+  printf '%d,%s,%s,%s,%s,%d,%s,%d,%s\n' \
+    "$index" "$observed_at" "$sample_group" "$device_type" "$device_id" \
+    "$device_request" "$trace_id" "$latency" "$expected_status" \
+    >> "$OUTPUT_FILE"
   ((accepted += 1))
   last_trace_id="$trace_id"
 
-  if ((index == 1 || index % 50 == 0 || index == COUNT)); then
+  if ((index == 1 || index % 50 == 0 || index == unique_sample_count || index == COUNT)); then
     printf '[%d/%d] accepted; latest device=%s trace=%s\n' \
       "$index" "$COUNT" "$device_id" "$trace_id"
   fi
@@ -219,4 +250,6 @@ if [[ -n "$node_ip" ]]; then
 fi
 printf 'Web UI:          %s\n' "$WEB_UI_URL"
 printf 'Latest trace:    %s?trace_id=%s\n' "$WEB_UI_URL" "$last_trace_id"
+printf 'History example: %s?device_type=router&device_id=history-router-01\n' \
+  "$WEB_UI_URL"
 printf 'Note: the dashboard displays the latest 100 events and alerts.\n'

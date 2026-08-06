@@ -194,11 +194,11 @@ chmod +x scripts/clear-database.sh
 ```
 
 This is irreversible and creates no backup. The script validates the current
-cluster target, waits for `observability-db-0`, temporarily scales
-`alert-manager` to zero, prints table counts, truncates every non-system table
-with `RESTART IDENTITY CASCADE`, verifies the result and restores the original
-replica count. Its exit trap also attempts restoration after an error or
-interruption.
+cluster target, waits for `observability-db-0`, prints table counts and
+truncates every non-system table with `RESTART IDENTITY CASCADE`. It does not
+scale or restart `alert-manager` or any other workload. Zero rows are verified
+inside the cleanup transaction, but new rows can appear immediately afterward
+if the application continues receiving traffic.
 
 This only clears PostgreSQL data (`alerts`, `users` and `subscriptions`). The
 analytics event stream is stored in the `analytics-engine` Pod's `emptyDir` and
@@ -300,9 +300,9 @@ Common results are `404` for an incorrect Host/rule, `503` for a backend
 Service without Ready endpoints, and connection refusal when the controller,
 NodePort or host firewall is unavailable.
 
-### Generate 1,000 traces for the Web UI
+### Generate 300 traces for the Web UI
 
-From `node-1`, generate 1,000 metrics through the Ingress with:
+From `node-1`, generate 300 metrics through the Ingress with:
 
 ```bash
 chmod +x scripts/generate-traces.sh
@@ -312,22 +312,24 @@ chmod +x scripts/generate-traces.sh
 The script automatically discovers the HTTP NodePort of
 `ingress-nginx-controller`, sends requests with `Host: observability.local`,
 and saves every returned `trace_id` to a timestamped CSV file under `data/`.
-Every third sample exceeds the configured 150 ms latency threshold, so both
-normal events and alerts appear in the dashboard. It prints the dashboard URL
-and a link filtered by the latest trace when complete. Add the printed
+The first 264 samples use distinct device IDs. The final 36 samples create five
+history devices with 5, 6, 7, 8 and 10 requests respectively, ensuring their
+complete history remains inside the Web UI's latest-100 event window. Every
+third sample exceeds the configured 150 ms latency threshold, so both normal
+events and alerts appear in the dashboard. The script prints dashboard links
+filtered by the latest trace and by `history-router-01`. Add the printed
 `NODE_IP observability.local` mapping to the browser machine's `/etc/hosts` (or
-local DNS) when that hostname is not already resolvable. The Web UI displays
-the latest 100 events and alerts; the CSV retains the mapping for all 1,000
-generated traces.
+local DNS) when that hostname is not already resolvable. The CSV retains the
+mapping for all 300 generated traces.
 
 Override the sample count or endpoint when required:
 
 ```bash
-# Smaller Ingress run
+# Smaller Ingress run (must retain at least 36 history samples)
 COUNT=100 ./scripts/generate-traces.sh
 
 # Use local port-forwards instead of Ingress
-COUNT=1000 \
+COUNT=300 \
 TARGET_URL=http://127.0.0.1:8080/api/v1/metrics \
 WEB_UI_URL=http://127.0.0.1:8083/ \
 ./scripts/generate-traces.sh
