@@ -28,7 +28,7 @@ the same verifier without `--static-only`.
 | P3 | Replica-weighted stable/canary with a shared Service | `traffic-ingest-canary.yaml`; README canary procedure |
 | P4 | CPU HPA, 2–6 stable ingestion replicas at 60% | `hpa.yaml`; `kubectl get hpa` |
 | P5 | Committed base, dev overlay and prod overlay patching tags/replicas | `deployments/base`, `deployments/overlays/*` |
-| P6 | Installable traffic-ingest Helm chart with override/upgrade/history/rollback | `helm/traffic-ingest`; README Helm procedure |
+| P6 | Six installable Helm charts with overrides plus documented upgrade/history/rollback | `helm/*`; root README and `helm/README.md` |
 
 ## Environment, Configuration and Security
 
@@ -57,7 +57,7 @@ the same verifier without `--static-only`.
 |---|---|---|
 | O1 | Liveness on every core Deployment and database | Core workload manifests |
 | O2 | Readiness on every core Deployment and database | Core workload manifests |
-| O3 | Startup probe on all application service Deployments | Core workload manifests and Helm chart |
+| O3 | Startup probe on all application service Deployments | Core workload manifests and service Helm charts |
 | O4 | Logs, describe, events, top, endpoint, HPA and PVC runbook | Root README, “Debug runbook” |
 | O5 | Stable APIs: apps/v1, batch/v1, networking.k8s.io/v1, autoscaling/v2, policy/v1 | All Kubernetes manifests |
 

@@ -283,6 +283,111 @@ The repository also contains 20 hands-on CKAD exercises. See the
 [five-day lab guide](labs/README.md) and generate per-day verification reports
 with `./labs/verify-all.sh --report-dir lab-verification-reports`.
 
+## Self-assessment against the 50/50 review rubric
+
+This project is self-assessed against the same review model used in the sample
+trainee feedback: CKAD 50%, Microservices 50%, with a pass threshold of 90.
+This is repository evidence, not an instructor-issued grade. The live score
+remains conditional on the assigned cluster and a successful fresh deployment.
+
+| Pillar | Maximum | Self-assessed | Main deduction |
+|---|---:|---:|---|
+| CKAD | 50 | **48** | Live cluster prerequisites, cross-node networking and fresh Helm evidence must still be demonstrated |
+| Microservices | 50 | **46** | No retry/circuit-breaker/idempotency layer and no external trace exporter |
+| **Total** | **100** | **94 — projected pass** | Official result remains subject to instructor review and live demo |
+
+Repository verification currently reports **34/34 PASS** in static mode, and
+the Go unit/integration test suite passes. All six service/platform Helm charts
+have also been linted and rendered with Helm v4.2.3.
+
+### Automatic-fail safeguards
+
+| Condition | Status | Evidence |
+|---|---|---|
+| Fewer than three independently deployable services | **Clear** | Four separately built and deployed Go services |
+| No Kubernetes Deployments | **Clear** | Four core Deployments plus the traffic-ingest canary |
+| Plaintext application Secrets committed to Git | **Clear** | Runtime `observability-secrets` is generated from environment variables; manifests contain references only |
+| No external exposure | **Clear** | Multi-path Ingress plus NodePort fallbacks for ingest and frontend |
+| Pods cannot be shown Ready in the assigned namespace | **Live-gated** | Must pass `./scripts/verify-helm.sh --live` after every clean deployment |
+
+### Required CKAD checklist
+
+| ID | Result | Project evidence |
+|---|---|---|
+| D1 | **PASS** | Four service-specific multi-stage, non-root Dockerfiles with explicit tags |
+| D2 | **PASS** | Deployments, PostgreSQL StatefulSet and health-audit CronJob |
+| D3 | **PASS** | Config init container, log sidecar and Nginx ambassador |
+| D4 | **PASS** | Generated configuration and logs shared through `emptyDir` |
+| D5 | **PASS** | Retained local PV/PVC mounted by PostgreSQL on `node-2` |
+| D6 | **PASS** | Application, version and stable/canary track labels |
+| P1 | **PASS** | Every long-running application service uses a Deployment |
+| P2 | **PASS** | Zero-unavailable rolling update and documented status/history/undo workflow |
+| P3 | **PASS** | Stable and canary Deployments share the traffic-ingest Service |
+| P4 | **PASS** | CPU HPA scales stable ingest between 2 and 6 replicas at 60% |
+| P5 | **PASS** | Kustomize base with committed dev and prod overlays |
+| P6 | **PASS** | Six Helm charts cover platform controls, database and all four services; upgrade/history/rollback documented |
+| C1 | **PASS** | ConfigMaps injected through environment references and mounted volumes |
+| C2 | **PASS** | Secrets created at deploy time; no Secret values committed in manifests |
+| C3 | **PASS** | Non-root, RuntimeDefault seccomp, drop ALL, no escalation and read-only root filesystems |
+| C4 | **PASS** | Least-privilege audit ServiceAccount, Role and RoleBinding; application token mounting disabled |
+| C5 | **PASS** | Namespace ResourceQuota and LimitRange |
+| C6 | **PASS** | Requests and limits on application, init, sidecar, database and CronJob containers |
+| N1 | **PASS** | Stable ClusterIP DNS and a headless PostgreSQL Service |
+| N2 | **PASS** | Ingress and NodePort external exposure |
+| N3 | **PASS** | `/api/v1/metrics` and `/` route to different Services |
+| N4 | **PASS*** | Default deny plus explicit DNS and application-flow rules; the live verifier also expects a policy named `allow-dns` |
+| N5 | **PASS** | Smoke test fails if any core Service has no EndpointSlice address |
+| O1 | **PASS** | Liveness probes on every application workload and PostgreSQL |
+| O2 | **PASS** | Readiness probes on every application workload and PostgreSQL |
+| O3 | **PASS** | Startup probes on stable and canary application Deployments |
+| O4 | **PASS** | Logs, describe, events, top, endpoint, HPA and PVC troubleshooting runbook |
+| O5 | **PASS** | Stable Kubernetes workload, networking, autoscaling, batch, policy, RBAC and storage APIs |
+
+`N4` is satisfied semantically because Helm service policies include UDP/TCP
+53 egress directly. For compatibility with the name-based verifier, deploy the
+separate `allow-dns` policy documented by the project or include it in the
+platform release.
+
+### Microservices checklist and score
+
+| Area | Maximum | Score | Evidence |
+|---|---:|---:|---|
+| Bounded contexts and service count | 10 | **10** | Ingestion, analytics, alerting and operator presentation have separate responsibilities |
+| Independent deployability | 8 | **8** | Separate commands, Dockerfiles, images, Deployments and Helm releases |
+| API contracts and health | 8 | **7** | Real HTTP/JSON handlers, validation and health endpoints; no formal OpenAPI contract |
+| Data ownership and communication | 12 | **10** | Only alert-manager owns PostgreSQL; other services are stateless or own Pod-local events; HTTP-only architecture is documented honestly |
+| DNS, gateway and east-west flow | 6 | **6** | Ingress gateway, stable Service DNS and NetworkPolicy-restricted calls |
+| Pattern depth and coupling | 6 | **5** | Real trace propagation, persistence, notification and Kubernetes patterns; resilience layer remains limited |
+| **Microservices subtotal** | **50** | **46** | |
+
+Unlike the sample feedback project, this implementation does not claim NATS,
+Redis or polyglot persistence that is absent from the code. The business flow
+is real: ingest validates a metric, analytics evaluates the threshold,
+alert-manager persists qualifying alerts and dispatches matching subscriber
+notifications, and the frontend reads those APIs.
+
+### Evidence still required for the official live result
+
+Run these commands after a clean Helm deployment and keep the generated report:
+
+```bash
+./scripts/verify-helm.sh --live
+./scripts/smoke-test.sh
+./scripts/verify-requirements.sh --overlay prod \
+  --report requirement-verification.txt
+
+kubectl get pods,svc,endpointslices,hpa,ingress,pvc,networkpolicy \
+  -n advanced-observability -o wide
+kubectl get ingressclass
+kubectl get apiservice v1beta1.metrics.k8s.io
+kubectl top nodes
+kubectl top pods -n advanced-observability --containers
+```
+
+The live acceptance is not complete if the IngressClass or Metrics API is
+missing, a Service has no endpoint, Pods are not Ready, or Calico cannot carry
+traffic between Pods scheduled on different nodes.
+
 ## Repository map
 
 | Path | Purpose |
