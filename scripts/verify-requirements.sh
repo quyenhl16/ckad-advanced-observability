@@ -156,8 +156,8 @@ begin_check MS1 Required 'Microservice scope and boundaries' \
   'The project has 3-5 independently deployable, single-responsibility core services and documents their communication and data ownership.'
 run_command "find ${ROOT_Q}/services -mindepth 2 -maxdepth 2 -name Dockerfile -print | sort"
 dockerfile_count="$(printf '%s\n' "$LAST_OUTPUT" | grep -c 'Dockerfile$' || true)"
-run_command "grep -E '^\\| \`(traffic-ingest|analytics-engine|alert-manager|observability-frontend)\` \\|' ${ROOT_Q}/README.md"
-service_row_count="$(printf '%s\n' "$LAST_OUTPUT" | grep -c '^|' || true)"
+run_command "grep -E '^\\| \`(traffic-ingest|analytics-engine|alert-manager|observability-frontend)\` \\|' ${ROOT_Q}/README.md | cut -d'|' -f2 | sort -u"
+service_row_count="$(printf '%s\n' "$LAST_OUTPUT" | grep -c '[^[:space:]]' || true)"
 if [[ "$dockerfile_count" -eq 4 && "$service_row_count" -eq 4 ]] && \
    grep -q 'Communication is synchronous HTTP' "$ROOT_DIR/README.md" && \
    grep -q 'Data ownership' "$ROOT_DIR/docs/architecture.md"; then

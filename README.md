@@ -54,8 +54,23 @@ links ingestion, analysis and alert data in the dashboard.
 | `alert-manager` | Manage alerts, users, subscriptions and notifications | 8082 | PostgreSQL schema |
 | `observability-frontend` | Render the operator dashboard and forms | 8083 | Stateless |
 
-PostgreSQL is supporting infrastructure owned by `alert-manager`, not a fifth
-core microservice. Communication is synchronous HTTP over Kubernetes DNS. See
+### Business responsibility of each service
+
+| Service | Input | Business processing | Output and dependencies |
+|---|---|---|---|
+| `traffic-ingest` | `POST /api/v1/metrics` from a device client or the public Ingress | Decodes and validates router, switch, server, firewall or access-point telemetry; supplies the observation time; starts or continues an OpenTelemetry trace | Calls `analytics-engine` and returns HTTP `202` with the correlated `trace_id` only after analytics accepts the metric |
+| `analytics-engine` | Validated metric on `POST /internal/v1/analyze` | Records the analysis event, compares latency with the configured threshold (150 ms by default), and classifies it as `NORMAL` or `THRESHOLD_EXCEEDED` | Exposes recent events to the dashboard; for an exceeded threshold, creates an alert through `alert-manager` with the same `trace_id` |
+| `alert-manager` | Internal alerts plus dashboard requests for alerts, users and subscriptions | Authenticates internal alert creation, persists alerts, manages notification users/subscriptions, finds subscribers matching a device type or device ID, and dispatches log or SMTP notifications | Owns the PostgreSQL tables and migrations; exposes alert/subscription APIs and a database-aware readiness endpoint |
+| `observability-frontend` | Browser requests and filter/form submissions | Loads events, alerts, users and subscriptions, correlates them by trace, device type and device ID, and handles subscription administration forms | Renders the operator dashboard; reads `analytics-engine` and `alert-manager` through internal Kubernetes Services |
+
+PostgreSQL is intentionally not accessed by every service. It is supporting
+infrastructure owned exclusively by `alert-manager`; the other services use
+HTTP contracts instead of sharing its tables. The `health-audit` CronJob is a
+maintenance component rather than a business microservice: it periodically
+lists Pods through a least-privilege ServiceAccount and writes structured audit
+logs.
+
+Communication is synchronous HTTP over Kubernetes DNS. See
 [architecture.md](docs/architecture.md) for boundaries, contracts, data
 ownership and failure behavior.
 
@@ -232,12 +247,38 @@ kubectl rollout undo deployment/traffic-ingest -n advanced-observability
 
 ## Canary demonstration
 
-The stable and canary Deployments share the `traffic-ingest` Service. Inspect
-their endpoints, promote a validated image, or remove canary traffic:
+`traffic-ingest` has stable and canary Deployments because it is the public
+entry point of the metric-processing flow:
+
+```text
+Client -> Ingress -> traffic-ingest Service
+                         |-> stable Pods -> analytics-engine
+                         `-> canary Pod  -> analytics-engine
+```
+
+- **Stable** runs the currently approved image and carries normal production
+  traffic. Its replicas are managed by the HPA.
+- **Canary** runs a candidate image against a limited share of real metrics
+  before that image replaces stable. It normally remains at one replica.
+- Both tracks implement the same ingestion contract and share the Service
+  selector, but each request is sent to only one endpoint; Kubernetes does not
+  duplicate a metric across stable and canary.
+- With three stable endpoints and one canary endpoint, the expected split is
+  approximately 75% stable and 25% canary. This is replica-based rather than
+  exact weighted routing, so persistent connections can skew the observed
+  ratio.
+- Operators compare readiness, restart counts, HTTP errors, latency, logs and
+  trace results. A healthy candidate is promoted by updating stable; a failing
+  candidate is removed by scaling canary to zero.
+
+Inspect the two tracks and their shared endpoints, promote a validated image,
+or remove canary traffic:
 
 ```bash
 kubectl get pods -n advanced-observability -l app=traffic-ingest \
   -L deployment-track,app.kubernetes.io/version
+kubectl get endpointslice -n advanced-observability \
+  -l kubernetes.io/service-name=traffic-ingest -o wide
 kubectl set image deployment/traffic-ingest \
   app=registry.example.com/team/traffic-ingest:1.1.0 \
   -n advanced-observability
