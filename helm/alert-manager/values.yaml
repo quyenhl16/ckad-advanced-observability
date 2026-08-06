@@ -1,0 +1,71 @@
+replicaCount: 1
+
+image:
+  repository: ckad/alert-manager
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+initImage:
+  repository: postgres
+  tag: "17-alpine"
+  pullPolicy: IfNotPresent
+
+sidecars:
+  logImage: busybox:1.37
+  nginxImage: nginxinc/nginx-unprivileged:1.27-alpine
+
+service:
+  type: ClusterIP
+  port: 8082
+  appPort: 18082
+
+config:
+  notifier: log
+  repository: postgres
+
+postgres:
+  host: observability-db
+  port: 5432
+  sslMode: disable
+
+secret:
+  existingSecret: observability-secrets
+  alertApiKey: ALERT_API_KEY
+  postgresUser: POSTGRES_USER
+  postgresPassword: POSTGRES_PASSWORD
+  postgresDatabase: POSTGRES_DB
+  smtpAddress: SMTP_ADDRESS
+  smtpHost: SMTP_HOST
+  smtpUsername: SMTP_USERNAME
+  smtpPassword: SMTP_PASSWORD
+  smtpFrom: SMTP_FROM
+
+resources:
+  app:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+  init:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {cpu: 50m, memory: 64Mi}
+  logSidecar:
+    requests: {cpu: 5m, memory: 4Mi}
+    limits: {cpu: 25m, memory: 16Mi}
+  nginx:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {cpu: 100m, memory: 64Mi}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  analyticsPodSelector: {app: analytics-engine}
+  frontendPodSelector: {app: observability-frontend}
+  databasePodSelector: {app: observability-db}
+  smtpPort: 587
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

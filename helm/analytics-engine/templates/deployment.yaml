@@ -1,32 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "traffic-ingest.fullname" . }}
+  name: {{ include "analytics-engine.fullname" . }}
   labels:
-    {{- include "traffic-ingest.labels" . | nindent 4 }}
+    {{- include "analytics-engine.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   revisionHistoryLimit: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
   selector:
     matchLabels:
-      {{- include "traffic-ingest.selectorLabels" . | nindent 6 }}
+      {{- include "analytics-engine.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "traffic-ingest.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: ingestion
+        {{- include "analytics-engine.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: analytics
         app.kubernetes.io/part-of: advanced-observability
         app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-        {{- with .Values.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
@@ -39,12 +29,13 @@ spec:
         runAsNonRoot: true
         runAsUser: 65532
         runAsGroup: 65532
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       initContainers:
         - name: config-init
           image: {{ .Values.sidecars.initImage | quote }}
-          command: [sh, -c, 'sed "s/PUBLIC_PORT/{{ .Values.service.port }}/g; s/APP_PORT/{{ .Values.service.appPort }}/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log']
+          command: [sh, -c, 'sed "s/PUBLIC_PORT/{{ .Values.service.port }}/g; s/APP_PORT/{{ .Values.service.appPort }}/g" /templates/nginx.conf.template > /generated/nginx.conf && touch /logs/access.log /events/events.jsonl']
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -55,6 +46,7 @@ spec:
             - {name: proxy-template, mountPath: /templates, readOnly: true}
             - {name: generated-config, mountPath: /generated}
             - {name: shared-logs, mountPath: /logs}
+            - {name: analytics-logs, mountPath: /events}
       containers:
         - name: app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -64,39 +56,40 @@ spec:
               containerPort: {{ .Values.service.appPort }}
           envFrom:
             - configMapRef:
-                name: {{ include "traffic-ingest.fullname" . }}-config
+                name: {{ include "analytics-engine.fullname" . }}-config
           env:
-            - name: HTTP_ADDR
-              value: ":{{ .Values.service.appPort }}"
+            - {name: HTTP_ADDR, value: ":{{ .Values.service.appPort }}"}
+            - {name: ANALYTICS_LOG_PATH, value: /var/log/analytics/events.jsonl}
+            - name: ALERT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "secret.existingSecret is required" .Values.secret.existingSecret }}
+                  key: {{ .Values.secret.alertApiKey }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
+            capabilities: {drop: [ALL]}
           resources:
             {{- toYaml .Values.resources.app | nindent 12 }}
           startupProbe:
-            httpGet:
-              path: /health/live
-              port: app-http
+            httpGet: {path: /health/live, port: app-http}
             periodSeconds: 2
             failureThreshold: 15
           readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: app-http
+            httpGet: {path: /health/ready, port: app-http}
+            initialDelaySeconds: 2
             periodSeconds: 5
             timeoutSeconds: 2
           livenessProbe:
-            httpGet:
-              path: /health/live
-              port: app-http
+            httpGet: {path: /health/live, port: app-http}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 2
+          volumeMounts:
+            - {name: analytics-logs, mountPath: /var/log/analytics}
         - name: log-sidecar
           image: {{ .Values.sidecars.logImage | quote }}
-          command: [sh, -c, 'tail -n+1 -F /logs/access.log']
+          command: [sh, -c, 'tail -n+1 -F /logs/access.log /events/events.jsonl']
           resources:
             {{- toYaml .Values.resources.logSidecar | nindent 12 }}
           securityContext:
@@ -105,6 +98,7 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: shared-logs, mountPath: /logs, readOnly: true}
+            - {name: analytics-logs, mountPath: /events, readOnly: true}
         - name: nginx-ambassador
           image: {{ .Values.sidecars.nginxImage | quote }}
           command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
@@ -121,9 +115,10 @@ spec:
             - {name: shared-logs, mountPath: /var/log/shared}
             - {name: nginx-tmp, mountPath: /tmp}
       volumes:
+        - {name: analytics-logs, emptyDir: {}}
         - name: proxy-template
           configMap:
-            name: {{ include "traffic-ingest.fullname" . }}-nginx
+            name: {{ include "analytics-engine.fullname" . }}-nginx
             items: [{key: nginx.conf.template, path: nginx.conf.template}]
         - {name: generated-config, emptyDir: {}}
         - {name: shared-logs, emptyDir: {}}

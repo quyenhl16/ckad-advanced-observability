@@ -1,0 +1,30 @@
+resourceQuota:
+  enabled: true
+  hard:
+    pods: "20"
+    requests.cpu: "4"
+    requests.memory: 4Gi
+    limits.cpu: "8"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "4"
+    requests.storage: 10Gi
+
+limitRange:
+  enabled: true
+  defaultRequest: {cpu: 25m, memory: 32Mi}
+  default: {cpu: 250m, memory: 128Mi}
+  min: {cpu: 5m, memory: 4Mi}
+  max: {cpu: "1", memory: 1Gi}
+
+networkPolicy:
+  defaultDeny: true
+
+healthAudit:
+  enabled: true
+  schedule: "*/5 * * * *"
+  image: curlimages/curl:8.10.1
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  resources:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {cpu: 100m, memory: 64Mi}

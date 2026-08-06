@@ -1,0 +1,184 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alert-manager.fullname" . }}
+  labels:
+    {{- include "alert-manager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "alert-manager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "alert-manager.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: alerting
+        app.kubernetes.io/part-of: advanced-observability
+        app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: config-init
+          image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+          imagePullPolicy: {{ .Values.initImage.pullPolicy }}
+          command:
+            - sh
+            - -ec
+            - |
+              sed "s/PUBLIC_PORT/{{ .Values.service.port }}/g; s/APP_PORT/{{ .Values.service.appPort }}/g" \
+                /templates/nginx.conf.template > /generated/nginx.conf
+              touch /logs/access.log
+              chgrp 65532 /logs/access.log
+              chmod 0664 /logs/access.log
+              for attempt in $(seq 1 60); do
+                if PGPASSWORD="$POSTGRES_PASSWORD" psql \
+                  -h {{ .Values.postgres.host }} -p {{ .Values.postgres.port }} \
+                  -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+                  -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+                  exit 0
+                fi
+                echo "Waiting for authenticated PostgreSQL connection (${attempt}/60)" >&2
+                sleep 2
+              done
+              echo "PostgreSQL authentication did not become ready" >&2
+              exit 1
+          env:
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: {{ required "secret.existingSecret is required" .Values.secret.existingSecret }}, key: {{ .Values.secret.postgresUser }}}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.postgresPassword }}}}
+            - name: POSTGRES_DB
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.postgresDatabase }}}}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            {{- toYaml .Values.resources.init | nindent 12 }}
+          volumeMounts:
+            - {name: proxy-template, mountPath: /templates, readOnly: true}
+            - {name: generated-config, mountPath: /generated}
+            - {name: shared-logs, mountPath: /logs}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: app-http
+              containerPort: {{ .Values.service.appPort }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "alert-manager.fullname" . }}-config
+          env:
+            - {name: HTTP_ADDR, value: ":{{ .Values.service.appPort }}"}
+            - name: ALERT_API_KEY
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.alertApiKey }}}}
+            - name: SMTP_ADDRESS
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.smtpAddress }}}}
+            - name: SMTP_HOST
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.smtpHost }}}}
+            - name: SMTP_USERNAME
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.smtpUsername }}}}
+            - name: SMTP_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.smtpPassword }}}}
+            - name: SMTP_FROM
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.smtpFrom }}}}
+            - {name: PGHOST, value: {{ .Values.postgres.host | quote }}}
+            - {name: PGPORT, value: {{ .Values.postgres.port | quote }}}
+            - name: PGUSER
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.postgresUser }}}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.postgresPassword }}}}
+            - name: PGDATABASE
+              valueFrom: {secretKeyRef: {name: {{ .Values.secret.existingSecret }}, key: {{ .Values.secret.postgresDatabase }}}}
+            - {name: PGSSLMODE, value: {{ .Values.postgres.sslMode | quote }}}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            {{- toYaml .Values.resources.app | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /health/live, port: app-http}
+            periodSeconds: 2
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /health/ready, port: app-http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: app-http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+        - name: log-sidecar
+          image: {{ .Values.sidecars.logImage | quote }}
+          command: [sh, -c, 'tail -n+1 -F /logs/access.log']
+          resources:
+            {{- toYaml .Values.resources.logSidecar | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: shared-logs, mountPath: /logs, readOnly: true}
+        - name: nginx-ambassador
+          image: {{ .Values.sidecars.nginxImage | quote }}
+          command: [nginx, -g, "daemon off;", -c, /config/nginx.conf]
+          ports:
+            - {name: http, containerPort: {{ .Values.service.port }}}
+          resources:
+            {{- toYaml .Values.resources.nginx | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: generated-config, mountPath: /config, readOnly: true}
+            - {name: shared-logs, mountPath: /var/log/shared}
+            - {name: nginx-tmp, mountPath: /tmp}
+      volumes:
+        - name: proxy-template
+          configMap:
+            name: {{ include "alert-manager.fullname" . }}-nginx
+            items: [{key: nginx.conf.template, path: nginx.conf.template}]
+        - {name: generated-config, emptyDir: {}}
+        - {name: shared-logs, emptyDir: {}}
+        - {name: nginx-tmp, emptyDir: {}}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

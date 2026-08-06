@@ -1,5 +1,3 @@
-replicaCount: 3
-
 image:
   repository: registry.example.com/ckad/traffic-ingest
   tag: "1.0.0"
@@ -8,3 +6,12 @@ image:
 config:
   analyticsURL: http://analytics-engine.advanced-observability.svc.cluster.local:8081
   httpClientTimeout: 3s
+
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 8
+
+canary:
+  image:
+    repository: registry.example.com/ckad/traffic-ingest-canary
+    tag: "1.1.0"

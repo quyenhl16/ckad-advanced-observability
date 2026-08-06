@@ -1,0 +1,43 @@
+image:
+  repository: postgres
+  tag: "17-alpine"
+  pullPolicy: IfNotPresent
+
+secret:
+  existingSecret: observability-secrets
+  userKey: POSTGRES_USER
+  passwordKey: POSTGRES_PASSWORD
+  databaseKey: POSTGRES_DB
+
+service:
+  port: 5432
+
+persistence:
+  storageClass: observability-local
+  size: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  local:
+    create: true
+    pvName: observability-db-pv-node2
+    path: /var/lib/observability-postgres
+    nodeHostname: node-2
+    reclaimPolicy: Retain
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+networkPolicy:
+  enabled: true
+  alertManagerPodSelector:
+    app: alert-manager
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

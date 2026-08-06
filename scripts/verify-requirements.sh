@@ -343,17 +343,17 @@ else
 fi
 
 begin_check P6 Required 'Installable Helm chart with upgrade and rollback' \
-  'The chart accepts values overrides; install, upgrade, history and rollback are documented.'
+  'Every service chart accepts values overrides; install, upgrade, history and rollback are documented.'
 if [[ $HELM_AVAILABLE -eq 0 ]]; then
-  run_command "helm lint ${ROOT_Q}/helm/traffic-ingest && helm template requirement-check ${ROOT_Q}/helm/traffic-ingest --set-string image.tag=verify-1.0.0 --set replicaCount=2 >/dev/null"
+  run_command "for chart in observability-platform observability-db alert-manager analytics-engine traffic-ingest observability-frontend; do helm lint ${ROOT_Q}/helm/\"\$chart\" && helm template \"\$chart\" ${ROOT_Q}/helm/\"\$chart\" -n advanced-observability >/dev/null || exit 1; done"
   helm_rc=$LAST_RC
 else
-  run_command "test -f ${ROOT_Q}/helm/traffic-ingest/Chart.yaml && test -f ${ROOT_Q}/helm/traffic-ingest/values.yaml && test -f ${ROOT_Q}/helm/traffic-ingest/templates/deployment.yaml"
+  run_command "for chart in observability-platform observability-db alert-manager analytics-engine traffic-ingest observability-frontend; do test -f ${ROOT_Q}/helm/\"\$chart\"/Chart.yaml && test -f ${ROOT_Q}/helm/\"\$chart\"/values.yaml || exit 1; done"
   helm_rc=$LAST_RC
 fi
-run_command "grep -n -E 'helm (upgrade --install|upgrade|history|rollback)' ${ROOT_Q}/README.md"
+run_command "grep -n -E 'helm (upgrade --install|upgrade|history|rollback)' ${ROOT_Q}/README.md ${ROOT_Q}/helm/README.md"
 if [[ "$helm_rc" -eq 0 ]] && contains "$LAST_OUTPUT" 'upgrade --install' && contains "$LAST_OUTPUT" 'history' && contains "$LAST_OUTPUT" 'rollback'; then
-  pass_check 'The traffic-ingest chart is structurally present/lintable and README covers install, override, upgrade, history and rollback.'
+  pass_check 'All service and platform charts are structurally present/lintable and documentation covers install, override, upgrade, history and rollback.'
 else
   fail_check 'Helm chart validation or operating documentation is incomplete.'
 fi
@@ -596,7 +596,7 @@ begin_check O3 Recommended 'Startup probe for slow startup' \
 if [[ "$LIVE_AVAILABLE" == true ]]; then
   run_command "kubectl get deployment traffic-ingest -n ${NS_Q} -o jsonpath='{.spec.template.spec.containers[?(@.name==\"app\")].startupProbe.httpGet.path}{\"\\n\"}'"
 else
-  run_command "grep -R -n 'startupProbe:' ${ROOT_Q}/deployments/base ${ROOT_Q}/helm/traffic-ingest/templates"
+  run_command "grep -R -n 'startupProbe:' ${ROOT_Q}/deployments/base ${ROOT_Q}/helm"
 fi
 if contains "$LAST_OUTPUT" '/health/live' || contains "$LAST_OUTPUT" 'startupProbe:'; then
   pass_check 'Startup probes are implemented on all application service Deployments and in the Helm chart.'
@@ -615,9 +615,9 @@ fi
 
 begin_check O5 Required 'Current stable Kubernetes APIs' \
   'Manifests avoid deprecated API versions and use stable APIs compatible with Kubernetes 1.35.'
-run_command "grep -R -n '^apiVersion:' ${ROOT_Q}/deployments ${ROOT_Q}/helm/traffic-ingest | sort"
+run_command "grep -R -n '^apiVersion:' ${ROOT_Q}/deployments ${ROOT_Q}/helm | sort"
 api_output="$LAST_OUTPUT"
-run_command "grep -R -n -E 'extensions/v1beta1|apps/v1beta|networking.k8s.io/v1beta1|batch/v1beta1|autoscaling/v2beta' ${ROOT_Q}/deployments ${ROOT_Q}/helm/traffic-ingest || true"
+run_command "grep -R -n -E 'extensions/v1beta1|apps/v1beta|networking.k8s.io/v1beta1|batch/v1beta1|autoscaling/v2beta' ${ROOT_Q}/deployments ${ROOT_Q}/helm || true"
 if [[ -n "$api_output" && -z "$LAST_OUTPUT" ]]; then
   pass_check 'Workloads use apps/v1 and batch/v1; networking, HPA, PDB, RBAC and storage resources use current stable APIs.'
 else
@@ -651,8 +651,8 @@ else
 fi
 
 begin_check R1 Required 'Repository deliverable layout' \
-  'Repository includes README, architecture/checklist/proposal docs, service Dockerfiles, Kustomize base/overlays, Helm chart, and build/deploy/smoke scripts.'
-run_command "for path in README.md docs/architecture.md docs/ckad-checklist.md docs/project-proposal.md deployments/base/kustomization.yaml deployments/overlays/dev/kustomization.yaml deployments/overlays/prod/kustomization.yaml helm/traffic-ingest/Chart.yaml scripts/build.sh scripts/deploy.sh scripts/smoke-test.sh scripts/demo.sh scripts/verify-requirements.sh; do test -e ${ROOT_Q}/\"\$path\" && printf '%s\\n' \"\$path\" || { printf 'MISSING %s\\n' \"\$path\"; exit 1; }; done"
+  'Repository includes README, architecture/checklist/proposal docs, service Dockerfiles, Kustomize base/overlays, service Helm charts, and build/deploy/smoke scripts.'
+run_command "for path in README.md docs/architecture.md docs/ckad-checklist.md docs/project-proposal.md deployments/base/kustomization.yaml deployments/overlays/dev/kustomization.yaml deployments/overlays/prod/kustomization.yaml helm/observability-platform/Chart.yaml helm/observability-db/Chart.yaml helm/alert-manager/Chart.yaml helm/analytics-engine/Chart.yaml helm/traffic-ingest/Chart.yaml helm/observability-frontend/Chart.yaml scripts/build.sh scripts/deploy.sh scripts/deploy-helm.sh scripts/smoke-test.sh scripts/demo.sh scripts/verify-requirements.sh; do test -e ${ROOT_Q}/\"\$path\" && printf '%s\\n' \"\$path\" || { printf 'MISSING %s\\n' \"\$path\"; exit 1; }; done"
 if [[ $LAST_RC -eq 0 ]] && ! contains "$LAST_OUTPUT" 'MISSING'; then
   pass_check 'All required or equivalent repository deliverables are present.'
 else

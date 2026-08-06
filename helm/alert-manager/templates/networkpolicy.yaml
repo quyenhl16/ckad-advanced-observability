@@ -1,0 +1,39 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "alert-manager.fullname" . }}
+  labels:
+    {{- include "alert-manager.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "alert-manager.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.analyticsPodSelector | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.frontendPodSelector | nindent 14 }}
+      ports:
+        - {protocol: TCP, port: {{ .Values.service.port }}}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.databasePodSelector | nindent 14 }}
+      ports:
+        - {protocol: TCP, port: {{ .Values.postgres.port }}}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - ports:
+        - {protocol: TCP, port: {{ .Values.networkPolicy.smtpPort }}}
+{{- end }}

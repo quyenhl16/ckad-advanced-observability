@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "observability-db.fullname" . }}
+  labels:
+    {{- include "observability-db.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "observability-db.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: postgres
+      port: {{ .Values.service.port }}
+      targetPort: postgres

@@ -385,22 +385,30 @@ count.
 
 ## Helm install, upgrade and rollback
 
-The chart packages the critical ingestion service independently. Install it
-with a release name that does not collide with the Kustomize workload:
+The project has one chart per service. Helm cannot safely adopt the resources
+from a Kustomize deployment, so clean that deployment before switching the
+namespace to Helm ownership:
 
 ```bash
-helm upgrade --install capstone-ingest helm/traffic-ingest \
-  -n advanced-observability \
-  --set image.repository=ckad/traffic-ingest \
-  --set-string image.tag=1.0.0 \
-  --set replicaCount=2
+./scripts/cleanup.sh --confirm advanced-observability
+export POSTGRES_PASSWORD='replace-me'
+export ALERT_API_KEY='replace-me'
+./scripts/deploy-helm.sh \
+  --registry 10.206.0.3:5000 \
+  --tag IMAGE_TAG --canary-tag CANARY_TAG --profile prod
+./scripts/verify-helm.sh --live
 
-helm upgrade capstone-ingest helm/traffic-ingest \
+helm upgrade traffic-ingest helm/traffic-ingest \
   -n advanced-observability --reuse-values \
-  --set-string image.tag=1.0.1 --set replicaCount=3
-helm history capstone-ingest -n advanced-observability
-helm rollback capstone-ingest 1 -n advanced-observability
+  --set-string image.tag=1.0.1
+helm history traffic-ingest -n advanced-observability
+helm rollback traffic-ingest 1 -n advanced-observability
 ```
+
+The six releases are installed in dependency order: `observability-platform`,
+`observability-db`, `alert-manager`, `analytics-engine`, `traffic-ingest`, then
+`observability-frontend`. Detailed values and uninstall behavior are in
+[`helm/README.md`](../helm/README.md).
 
 ## PVC persistence demo
 

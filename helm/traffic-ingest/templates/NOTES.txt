@@ -1,0 +1,7 @@
+Traffic Ingest is available inside {{ .Release.Namespace }} at:
+  http://{{ include "traffic-ingest.fullname" . }}:{{ .Values.service.port }}
+{{- if eq .Values.service.type "NodePort" }}
+NodePort: {{ .Values.service.nodePort }}
+{{- end }}
+
+The stable and canary Deployments share the same Service selector.

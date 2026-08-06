@@ -68,7 +68,8 @@ ownership and failure behavior.
 - Runtime Secret generation, ConfigMaps, non-root security contexts, RBAC,
   ResourceQuota and LimitRange.
 - Default-deny NetworkPolicies with explicit application and DNS flows.
-- Kustomize `dev`/`prod` overlays plus a Helm chart for `traffic-ingest`.
+- Kustomize `dev`/`prod` overlays plus an independent Helm chart for every
+  application service and PostgreSQL.
 - Retained local PV/PVC for PostgreSQL on `node-2`.
 
 The complete requirement-to-evidence map is in
@@ -140,6 +141,22 @@ For a local kind cluster:
 
 Full cleanup/redeploy and manual Kustomize procedures are documented in the
 [operations guide](docs/operations-guide.md#full-cleanup-and-redeploy).
+
+To deploy the same application as six Helm releases (platform controls plus
+five runtime components) in the main namespace:
+
+```bash
+./scripts/cleanup.sh --confirm advanced-observability
+export POSTGRES_PASSWORD='replace-with-a-strong-password'
+export ALERT_API_KEY='replace-with-a-different-strong-value'
+./scripts/deploy-helm.sh \
+  --registry registry.example.com/team \
+  --tag 1.0.0 --canary-tag 1.1.0 --profile prod
+./scripts/verify-helm.sh --live
+```
+
+See [helm/README.md](helm/README.md) for chart dependencies and per-service
+upgrade, rollback and uninstall commands.
 
 ## Verify and access
 
@@ -231,14 +248,14 @@ kubectl scale deployment/traffic-ingest-canary --replicas=0 \
 ### Helm workflow
 
 ```bash
-helm upgrade --install capstone-ingest helm/traffic-ingest \
-  -n advanced-observability \
-  --set image.repository=registry.example.com/team/traffic-ingest \
-  --set-string image.tag=1.0.0
-helm upgrade capstone-ingest helm/traffic-ingest \
+./scripts/deploy-helm.sh --registry registry.example.com/team \
+  --tag 1.0.0 --canary-tag 1.1.0 --profile prod
+./scripts/verify-helm.sh --live
+
+helm upgrade traffic-ingest helm/traffic-ingest \
   -n advanced-observability --reuse-values --set-string image.tag=1.0.1
-helm history capstone-ingest -n advanced-observability
-helm rollback capstone-ingest 1 -n advanced-observability
+helm history traffic-ingest -n advanced-observability
+helm rollback traffic-ingest 1 -n advanced-observability
 ```
 
 ### Debug essentials
@@ -273,7 +290,7 @@ with `./labs/verify-all.sh --report-dir lab-verification-reports`.
 | `cmd/`, `internal/` | Go service entrypoints and domain/application adapters |
 | `services/` | Service-specific multi-stage Dockerfiles |
 | `deployments/` | Kustomize base, overlays and Kubernetes manifests |
-| `helm/` | Standalone ingestion Helm chart |
+| `helm/` | Independent charts for the database and all four application services |
 | `scripts/` | Build, deploy, cleanup, smoke, trace and verification automation |
 | `labs/` | Five days of hands-on CKAD labs and verifiers |
 | `docs/` | Architecture, requirements, proposal and detailed operations |

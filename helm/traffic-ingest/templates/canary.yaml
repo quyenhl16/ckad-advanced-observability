@@ -1,0 +1,67 @@
+{{- if .Values.canary.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "traffic-ingest.fullname" . }}-canary
+  labels:
+    {{- include "traffic-ingest.labels" . | nindent 4 }}
+    app.kubernetes.io/version: {{ .Values.canary.image.tag | quote }}
+    deployment-track: canary
+spec:
+  replicas: {{ .Values.canary.replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "traffic-ingest.selectorLabels" . | nindent 6 }}
+      deployment-track: canary
+  template:
+    metadata:
+      labels:
+        {{- include "traffic-ingest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ingestion
+        app.kubernetes.io/part-of: advanced-observability
+        app.kubernetes.io/version: {{ .Values.canary.image.tag | quote }}
+        deployment-track: canary
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: app
+          image: "{{ .Values.canary.image.repository }}:{{ .Values.canary.image.tag }}"
+          imagePullPolicy: {{ .Values.canary.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: {{ .Values.service.port }}}
+          envFrom:
+            - configMapRef:
+                name: {{ include "traffic-ingest.fullname" . }}-config
+          env:
+            - {name: HTTP_ADDR, value: ":{{ .Values.service.port }}"}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            {{- toYaml .Values.canary.resources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 15
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+{{- end }}

@@ -1,0 +1,5 @@
+Web UI: http://{{ .Values.ingress.host }}{{ .Values.ingress.frontendPath }}
+Metric API: http://{{ .Values.ingress.host }}{{ .Values.ingress.metricPath }}
+{{- if eq .Values.service.type "NodePort" }}
+Frontend NodePort: {{ .Values.service.nodePort }}
+{{- end }}

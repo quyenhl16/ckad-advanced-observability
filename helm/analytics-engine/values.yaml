@@ -1,0 +1,50 @@
+replicaCount: 1
+
+image:
+  repository: ckad/analytics-engine
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+sidecars:
+  initImage: busybox:1.37
+  logImage: busybox:1.37
+  nginxImage: nginxinc/nginx-unprivileged:1.27-alpine
+
+service:
+  type: ClusterIP
+  port: 8081
+  appPort: 18081
+
+config:
+  alertManagerURL: http://alert-manager:8082
+  latencyThresholdMs: "150"
+  httpClientTimeout: 5s
+
+secret:
+  existingSecret: observability-secrets
+  alertApiKey: ALERT_API_KEY
+
+resources:
+  app:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+  init:
+    requests: {cpu: 5m, memory: 4Mi}
+    limits: {cpu: 25m, memory: 16Mi}
+  logSidecar:
+    requests: {cpu: 10m, memory: 8Mi}
+    limits: {cpu: 50m, memory: 32Mi}
+  nginx:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {cpu: 100m, memory: 64Mi}
+
+networkPolicy:
+  enabled: true
+  trafficPodSelector: {app: traffic-ingest}
+  frontendPodSelector: {app: observability-frontend}
+  alertManagerPodSelector: {app: alert-manager}
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

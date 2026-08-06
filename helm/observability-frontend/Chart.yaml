@@ -1,6 +1,6 @@
 apiVersion: v2
-name: traffic-ingest
-description: Metric ingestion service for Advanced Observability
+name: observability-frontend
+description: Web dashboard for Advanced Observability
 type: application
 version: 1.0.0
 appVersion: "1.0.0"

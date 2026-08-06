@@ -1,0 +1,40 @@
+{{- if .Values.persistence.local.create }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.persistence.storageClass }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "observability-db.labels" . | nindent 4 }}
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: {{ .Values.persistence.local.reclaimPolicy }}
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.persistence.local.pvName }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "observability-db.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.persistence.size }}
+  volumeMode: Filesystem
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  persistentVolumeReclaimPolicy: {{ .Values.persistence.local.reclaimPolicy }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  local:
+    path: {{ .Values.persistence.local.path | quote }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ .Values.persistence.local.nodeHostname | quote }}
+{{- end }}

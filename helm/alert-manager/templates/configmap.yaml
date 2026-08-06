@@ -1,19 +1,19 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "traffic-ingest.fullname" . }}-config
+  name: {{ include "alert-manager.fullname" . }}-config
   labels:
-    {{- include "traffic-ingest.labels" . | nindent 4 }}
+    {{- include "alert-manager.labels" . | nindent 4 }}
 data:
-  ANALYTICS_URL: {{ .Values.config.analyticsURL | quote }}
-  HTTP_CLIENT_TIMEOUT: {{ .Values.config.httpClientTimeout | quote }}
+  ALERT_NOTIFIER: {{ .Values.config.notifier | quote }}
+  ALERT_REPOSITORY: {{ .Values.config.repository | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "traffic-ingest.fullname" . }}-nginx
+  name: {{ include "alert-manager.fullname" . }}-nginx
   labels:
-    {{- include "traffic-ingest.labels" . | nindent 4 }}
+    {{- include "alert-manager.labels" . | nindent 4 }}
 data:
   nginx.conf.template: |
     pid /tmp/nginx.pid;

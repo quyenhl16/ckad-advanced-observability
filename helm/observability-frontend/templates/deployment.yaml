@@ -1,32 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "traffic-ingest.fullname" . }}
+  name: {{ include "observability-frontend.fullname" . }}
   labels:
-    {{- include "traffic-ingest.labels" . | nindent 4 }}
+    {{- include "observability-frontend.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   revisionHistoryLimit: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
   selector:
     matchLabels:
-      {{- include "traffic-ingest.selectorLabels" . | nindent 6 }}
+      {{- include "observability-frontend.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "traffic-ingest.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: ingestion
+        {{- include "observability-frontend.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
         app.kubernetes.io/part-of: advanced-observability
         app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-        {{- with .Values.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
@@ -39,8 +29,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 65532
         runAsGroup: 65532
-        seccompProfile:
-          type: RuntimeDefault
+        seccompProfile: {type: RuntimeDefault}
       initContainers:
         - name: config-init
           image: {{ .Values.sidecars.initImage | quote }}
@@ -60,37 +49,28 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: app-http
-              containerPort: {{ .Values.service.appPort }}
+            - {name: app-http, containerPort: {{ .Values.service.appPort }}}
           envFrom:
             - configMapRef:
-                name: {{ include "traffic-ingest.fullname" . }}-config
+                name: {{ include "observability-frontend.fullname" . }}-config
           env:
-            - name: HTTP_ADDR
-              value: ":{{ .Values.service.appPort }}"
+            - {name: HTTP_ADDR, value: ":{{ .Values.service.appPort }}"}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
+            capabilities: {drop: [ALL]}
           resources:
             {{- toYaml .Values.resources.app | nindent 12 }}
           startupProbe:
-            httpGet:
-              path: /health/live
-              port: app-http
+            httpGet: {path: /health/live, port: app-http}
             periodSeconds: 2
             failureThreshold: 15
           readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: app-http
+            httpGet: {path: /health/ready, port: app-http}
             periodSeconds: 5
             timeoutSeconds: 2
           livenessProbe:
-            httpGet:
-              path: /health/live
-              port: app-http
+            httpGet: {path: /health/live, port: app-http}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 2
@@ -123,7 +103,7 @@ spec:
       volumes:
         - name: proxy-template
           configMap:
-            name: {{ include "traffic-ingest.fullname" . }}-nginx
+            name: {{ include "observability-frontend.fullname" . }}-nginx
             items: [{key: nginx.conf.template, path: nginx.conf.template}]
         - {name: generated-config, emptyDir: {}}
         - {name: shared-logs, emptyDir: {}}

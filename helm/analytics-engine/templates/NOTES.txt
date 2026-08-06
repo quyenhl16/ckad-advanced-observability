@@ -1,0 +1,4 @@
+Analytics Engine is available inside {{ .Release.Namespace }} at:
+  http://{{ include "analytics-engine.fullname" . }}:{{ .Values.service.port }}
+
+It sends alerts to {{ .Values.config.alertManagerURL }}.

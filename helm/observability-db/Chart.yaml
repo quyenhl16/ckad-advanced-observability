@@ -1,0 +1,7 @@
+apiVersion: v2
+name: observability-db
+description: PostgreSQL persistence for Advanced Observability
+type: application
+version: 1.0.0
+appVersion: "17"
+kubeVersion: ">=1.30.0-0"

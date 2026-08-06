@@ -1,0 +1,33 @@
+{{- if .Values.limitRange.enabled }}
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: observability-container-defaults
+  labels:
+    {{- include "observability-platform.labels" . | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        {{- toYaml .Values.limitRange.defaultRequest | nindent 8 }}
+      default:
+        {{- toYaml .Values.limitRange.default | nindent 8 }}
+      min:
+        {{- toYaml .Values.limitRange.min | nindent 8 }}
+      max:
+        {{- toYaml .Values.limitRange.max | nindent 8 }}
+{{- end }}
+{{- if and .Values.limitRange.enabled .Values.resourceQuota.enabled }}
+---
+{{- end }}
+{{- if .Values.resourceQuota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: observability-quota
+  labels:
+    {{- include "observability-platform.labels" . | nindent 4 }}
+spec:
+  hard:
+    {{- toYaml .Values.resourceQuota.hard | nindent 4 }}
+{{- end }}

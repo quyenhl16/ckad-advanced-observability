@@ -1,7 +1,7 @@
-replicaCount: 2
+replicaCount: 1
 
 image:
-  repository: ckad/traffic-ingest
+  repository: ckad/observability-frontend
   tag: "1.0.0"
   pullPolicy: IfNotPresent
 
@@ -12,18 +12,30 @@ sidecars:
 
 service:
   type: NodePort
-  port: 8080
-  appPort: 18080
-  nodePort: 30080
+  port: 8083
+  appPort: 18083
+  nodePort: 30083
 
 config:
   analyticsURL: http://analytics-engine:8081
+  alertManagerURL: http://alert-manager:8082
   httpClientTimeout: 5s
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  host: observability.local
+  frontendPath: /
+  metricPath: /api/v1/metrics
+  trafficServiceName: traffic-ingest
+  trafficServicePort: 8080
+  tls: []
 
 resources:
   app:
-    requests: {cpu: 50m, memory: 32Mi}
-    limits: {cpu: 250m, memory: 128Mi}
+    requests: {cpu: 25m, memory: 24Mi}
+    limits: {cpu: 150m, memory: 96Mi}
   init:
     requests: {cpu: 5m, memory: 4Mi}
     limits: {cpu: 25m, memory: 16Mi}
@@ -34,24 +46,6 @@ resources:
     requests: {cpu: 10m, memory: 16Mi}
     limits: {cpu: 100m, memory: 64Mi}
 
-canary:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: ckad/traffic-ingest-canary
-    tag: "1.1.0"
-    pullPolicy: IfNotPresent
-  resources:
-    requests: {cpu: 50m, memory: 32Mi}
-    limits: {cpu: 250m, memory: 128Mi}
-
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 6
-  targetCPUUtilizationPercentage: 60
-  scaleDownStabilizationSeconds: 60
-
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
@@ -59,11 +53,9 @@ podDisruptionBudget:
 networkPolicy:
   enabled: true
   analyticsPodSelector: {app: analytics-engine}
+  alertManagerPodSelector: {app: alert-manager}
 
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
-podLabels:
-  deployment-track: stable

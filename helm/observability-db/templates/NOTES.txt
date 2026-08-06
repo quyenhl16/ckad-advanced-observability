@@ -1,0 +1,5 @@
+PostgreSQL is available inside {{ .Release.Namespace }} at:
+  {{ include "observability-db.fullname" . }}:{{ .Values.service.port }}
+
+The chart expects Secret {{ .Values.secret.existingSecret }} to exist before installation.
+The local PV is pinned to node {{ .Values.persistence.local.nodeHostname }}.

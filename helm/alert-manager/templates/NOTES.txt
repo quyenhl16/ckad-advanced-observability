@@ -1,0 +1,5 @@
+Alert Manager is available inside {{ .Release.Namespace }} at:
+  http://{{ include "alert-manager.fullname" . }}:{{ .Values.service.port }}
+
+The chart expects Secret {{ .Values.secret.existingSecret }} and PostgreSQL service
+{{ .Values.postgres.host }} to exist before the Pods become Ready.

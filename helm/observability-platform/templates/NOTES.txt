@@ -1,0 +1,2 @@
+Namespace controls and the health-audit CronJob are installed in:
+  {{ .Release.Namespace }}
