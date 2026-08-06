@@ -74,6 +74,108 @@ Communication is synchronous HTTP over Kubernetes DNS. See
 [architecture.md](docs/architecture.md) for boundaries, contracts, data
 ownership and failure behavior.
 
+## API catalog
+
+Only `POST /api/v1/metrics` and the frontend routes are exposed through the
+public Ingress. Analytics and alert-management APIs remain ClusterIP-only and
+are called by other services through Kubernetes DNS. Health routes are used by
+startup, readiness and liveness probes.
+
+### traffic-ingest API
+
+Base Service URL: `http://traffic-ingest:8080`.
+
+| Method | Path | Scope | Purpose and result |
+|---|---|---|---|
+| `POST` | `/api/v1/metrics` | Public through Ingress | Validate and forward one device metric; returns `202` with `{"status":"accepted","trace_id":"..."}` after analytics succeeds |
+| `GET` | `/health/live` | Probe/internal | Process liveness; returns `200` while the HTTP process is running |
+| `GET` | `/health/ready` | Probe/internal | Ingest readiness; returns `200` when the application can receive traffic |
+
+The metric body is JSON. `observed_at` is optional and defaults to the current
+UTC time. Supported `device_type` values are `router`, `switch`, `server`,
+`firewall` and `access_point`.
+
+```json
+{
+  "device_type": "router",
+  "device_id": "edge-router-01",
+  "cpu_usage_percent": 65,
+  "memory_usage_percent": 58,
+  "temperature_celsius": 52,
+  "latency_ms": 220,
+  "packet_loss_percent": 1,
+  "observed_at": "2026-08-06T01:00:00Z"
+}
+```
+
+CPU, memory and packet loss must be between 0 and 100; temperature must be
+between -50 and 150 degrees Celsius; latency cannot be negative. Invalid input
+returns `400`; a downstream analytics failure returns `500`.
+
+### analytics-engine API
+
+Base Service URL: `http://analytics-engine:8081`.
+
+| Method | Path | Scope | Purpose and result |
+|---|---|---|---|
+| `POST` | `/internal/v1/analyze` | Internal: traffic-ingest | Record an analysis event, evaluate the latency threshold and create an alert when exceeded; returns `200` |
+| `GET` | `/api/v1/events?limit=N` | Internal: frontend | Return the newest analysis events, including metric values, threshold, status and `trace_id` |
+| `GET` | `/health/live` | Probe/internal | Process liveness; returns `200` |
+| `GET` | `/health/ready` | Probe/internal | Analytics readiness; returns `200` |
+
+`POST /internal/v1/analyze` accepts the same metric schema as traffic-ingest.
+It is intentionally not exposed by Ingress. Events are classified as `NORMAL`
+or `THRESHOLD_EXCEEDED`.
+
+### alert-manager API
+
+Base Service URL: `http://alert-manager:8082`.
+
+| Method | Path | Scope/authentication | Purpose and result |
+|---|---|---|---|
+| `POST` | `/internal/v1/alerts` | Internal: analytics; `X-API-Key` required | Validate and persist an alert, then notify matching subscribers; returns `201` |
+| `GET` | `/api/v1/alerts?limit=N` | Internal: frontend | Return newest persisted alerts; returns `200` |
+| `POST` | `/api/v1/users` | Internal: frontend | Create a notification user from `name` and `email`; returns `201` |
+| `GET` | `/api/v1/users` | Internal: frontend | List notification users; returns `200` |
+| `DELETE` | `/api/v1/users/{id}` | Internal: frontend | Delete a user and cascade-delete that user's subscriptions; returns `204` or `404` |
+| `POST` | `/api/v1/subscriptions` | Internal: frontend | Subscribe a user to a device type and optional device ID; returns `201` |
+| `GET` | `/api/v1/subscriptions` | Internal: frontend | List subscriptions joined with user identity; returns `200` |
+| `DELETE` | `/api/v1/subscriptions/{id}` | Internal: frontend | Delete one subscription; returns `204` or `404` |
+| `GET` | `/health/live` | Probe/internal | Process liveness; returns `200` |
+| `GET` | `/health/ready` | Probe/internal | Ping PostgreSQL; returns `200` or `503` when the database is unavailable |
+
+User and subscription request examples:
+
+```json
+{"name":"Network Operator","email":"operator@example.com"}
+```
+
+```json
+{"user_id":1,"device_type":"router","device_id":"edge-router-01"}
+```
+
+An empty subscription `device_id` matches every device of the selected type.
+The internal alert endpoint returns `401` when `X-API-Key` does not match the
+runtime `ALERT_API_KEY` Secret.
+
+### observability-frontend routes
+
+Base Service URL: `http://observability-frontend:8083`; `/` is exposed through
+the public Ingress as the operator Web UI.
+
+| Method | Path | Input | Purpose and result |
+|---|---|---|---|
+| `GET` | `/?trace_id=&device_type=&device_id=` | Optional query filters | Load events, alerts, users and subscriptions and render the correlated HTML dashboard; returns `200` or `502` if a backend is unavailable |
+| `POST` | `/users` | HTML form: `name`, `email` | Create a user through alert-manager and redirect to `/#notifications` |
+| `POST` | `/subscriptions` | HTML form: `user_id`, `device_type`, optional `device_id` | Create a subscription and redirect to `/#notifications` |
+| `POST` | `/users/delete` | HTML form: `id` | Delete a user through alert-manager and redirect |
+| `POST` | `/subscriptions/delete` | HTML form: `id` | Delete a subscription through alert-manager and redirect |
+| `GET` | `/health/live` | None | Process liveness; returns `200` |
+| `GET` | `/health/ready` | None | Frontend readiness; returns `200` |
+
+The frontend form routes are browser-facing adapters, not duplicate business
+APIs. They call the versioned alert-manager endpoints over ClusterIP Services.
+
 ## Kubernetes design at a glance
 
 - Four Go services, five Deployments including canary, one PostgreSQL
