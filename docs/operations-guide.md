@@ -183,6 +183,27 @@ export ALERT_API_KEY='use-a-different-strong-value'
   --report requirement-verification.txt
 ```
 
+## Clear PostgreSQL data
+
+To delete all application rows without deleting the database, schema, roles or
+credentials, run from `node-1`:
+
+```bash
+chmod +x scripts/clear-database.sh
+./scripts/clear-database.sh --confirm DELETE-ALL-DATA
+```
+
+This is irreversible and creates no backup. The script validates the current
+cluster target, waits for `observability-db-0`, temporarily scales
+`alert-manager` to zero, prints table counts, truncates every non-system table
+with `RESTART IDENTITY CASCADE`, verifies the result and restores the original
+replica count. Its exit trap also attempts restoration after an error or
+interruption.
+
+This only clears PostgreSQL data (`alerts`, `users` and `subscriptions`). The
+analytics event stream is stored in the `analytics-engine` Pod's `emptyDir` and
+is cleared by recreating that Pod.
+
 ## Verify and access
 
 ```bash

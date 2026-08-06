@@ -183,6 +183,22 @@ ID to a timestamped CSV under `data/`.
 
 ## Essential operations
 
+### Clear PostgreSQL data
+
+Delete every row from the application database while retaining its schema,
+roles and credentials. This operation creates no backup and requires an
+explicit confirmation token:
+
+```bash
+chmod +x scripts/clear-database.sh
+./scripts/clear-database.sh --confirm DELETE-ALL-DATA
+```
+
+The script temporarily stops `alert-manager`, truncates all non-system tables,
+restarts their sequences, verifies zero rows and restores the original replica
+count. Analytics event history is separate because it lives in Pod-local
+`emptyDir`. See the [operations guide](docs/operations-guide.md#clear-postgresql-data).
+
 ### Rolling update and rollback
 
 ```bash
